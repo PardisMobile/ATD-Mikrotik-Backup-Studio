@@ -2,7 +2,7 @@
 
 ## Goal
 
-Preserve the existing RouterOS 7 scheduled-backup-to-SFTP workflow without adding any RouterOS callback. A dedicated ATD cron job scans the configured Linux backup directory once per minute, ignores files present at installation, checks file-size stability, and sends new files server-side. The Windows generator collects Telegram bot token and chat ID, which are saved in private configuration. The panel remains available for file management and manual send/retry.
+Preserve the existing RouterOS 7 scheduled-backup-to-SFTP workflow without adding any RouterOS callback. A dedicated ATD cron job scans the configured Linux backup directory once per minute, ignores files present at installation, checks file-size stability, and sends new files server-side. The Windows generator does not ask for Telegram credentials; the administrator configures them in the authenticated web panel, which stores them in private state. The panel remains available for file management and manual send/retry.
 
 ## Components
 
