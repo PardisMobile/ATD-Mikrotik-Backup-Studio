@@ -75,6 +75,29 @@ fi
 php -l "$TLS/config.php" >/dev/null || { echo 'Private configuration syntax check failed.' >&2; exit 8; }
 grep -q "const BACKUP_DIR" "$TLS/config.php" || { echo 'Private configuration is missing BACKUP_DIR.' >&2; exit 8; }
 
+# If an older installation has no Telegram credentials in its private config, seed them
+# from this generated package. Existing non-empty credentials and panel-saved settings are preserved.
+NEW_TG_TOKEN=$(php -r 'require $argv[1]; echo defined("TELEGRAM_BOT_TOKEN") ? TELEGRAM_BOT_TOKEN : "";' "$SRC/config.php")
+NEW_TG_CHAT=$(php -r 'require $argv[1]; echo defined("TELEGRAM_CHAT_ID") ? TELEGRAM_CHAT_ID : "";' "$SRC/config.php")
+OLD_TG_TOKEN=$(php -r 'require $argv[1]; echo defined("TELEGRAM_BOT_TOKEN") ? TELEGRAM_BOT_TOKEN : "";' "$TLS/config.php")
+OLD_TG_CHAT=$(php -r 'require $argv[1]; echo defined("TELEGRAM_CHAT_ID") ? TELEGRAM_CHAT_ID : "";' "$TLS/config.php")
+if [[ -n "$NEW_TG_TOKEN" && -n "$NEW_TG_CHAT" && -z "$OLD_TG_TOKEN" && -z "$OLD_TG_CHAT" ]]; then
+  python3 - "$TLS/config.php" "$NEW_TG_TOKEN" "$NEW_TG_CHAT" <<'PYTG'
+from pathlib import Path
+import re, sys
+path = Path(sys.argv[1])
+token, chat = sys.argv[2], sys.argv[3]
+text = path.read_text()
+text, n1 = re.subn(r"const TELEGRAM_BOT_TOKEN = '[^']*';", "const TELEGRAM_BOT_TOKEN = '" + token + "';", text, count=1)
+text, n2 = re.subn(r"const TELEGRAM_CHAT_ID = '[^']*';", "const TELEGRAM_CHAT_ID = '" + chat + "';", text, count=1)
+if n1 != 1 or n2 != 1:
+    raise SystemExit("Could not safely seed Telegram settings; existing config was not changed.")
+path.write_text(text)
+PYTG
+  chown root:atdbackup "$TLS/config.php"; chmod 0640 "$TLS/config.php"
+  php -l "$TLS/config.php" >/dev/null || { echo 'Telegram config migration failed PHP validation.' >&2; exit 8; }
+fi
+
 for f in send-backup.php panel.css panel.js; do
   if [[ -e "$APP/$f" ]]; then cp -p "$APP/$f" "$APP/$f.backup.$(date +%Y%m%d%H%M%S)"; fi
   # Keep the live PHP application on re-install; the explicit updater handles versioned code updates.
