@@ -545,90 +545,14 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
     $installServer = @'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# ATD MikroTik Backup Studio - safe deploy into an EXISTING web root directory.
-# Usage: sudo bash install-server.sh /existing/webroot/atd-backup
-# Update mode: sudo bash install-server.sh --update /absolute/path/to/installed/panel
-if [[ "${1:-}" == "--update" ]]; then
-  TARGET="${2:-}"
-  [[ -n "$TARGET" && "$TARGET" == /* && -d "$TARGET" ]] || { echo "Usage: sudo bash install-server.sh --update /absolute/path/to/installed/panel" >&2; exit 2; }
-  TMP_UPDATER="$(mktemp)"
-  trap 'rm -f -- "$TMP_UPDATER"' EXIT
-  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
-    "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/update-server.sh" -o "$TMP_UPDATER"
-  [[ -s "$TMP_UPDATER" ]] || { echo "Could not download GitHub updater." >&2; exit 9; }
-  bash "$TMP_UPDATER" "$TARGET"
-  exit $?
-fi
-TARGET="${1:-}"
-if [[ -z "$TARGET" || "$TARGET" != /* ]]; then echo "Usage: sudo bash install-server.sh /absolute/existing-webroot/atd-backup" >&2; exit 2; fi
-if [[ ! -d "$(dirname "$TARGET")" ]]; then echo "Parent directory does not exist; choose a folder under the existing website document root." >&2; exit 3; fi
-if [[ -e "$TARGET" && ! -d "$TARGET" ]]; then echo "Target exists and is not a directory." >&2; exit 4; fi
+# ATD standalone installer wrapper; runs the dedicated service installer without touching existing web-server configuration.
+[[ $(id -u) -eq 0 ]] || { echo 'Run with sudo: sudo bash install-server.sh' >&2; exit 2; }
 SRC="$(cd "$(dirname "$0")" && pwd)"
-for f in send-backup.php panel.css panel.js; do [[ -f "$SRC/$f" ]] || { echo "Missing required file: $SRC/$f" >&2; exit 5; }; done
-if ! command -v php >/dev/null 2>&1; then echo "PHP CLI is missing. Install PHP using your server's package manager, then retry." >&2; exit 6; fi
-if ! command -v curl >/dev/null 2>&1; then echo "curl is required for GitHub updates. Install curl and retry." >&2; exit 6; fi
-if ! php -r 'exit(extension_loaded("curl") ? 0 : 1);'; then echo "PHP cURL extension is missing. Install/enable it before retrying." >&2; exit 7; fi
-mkdir -p -- "$TARGET"
-chmod 0755 "$TARGET"
-for f in send-backup.php panel.css panel.js; do
-  if [[ -e "$TARGET/$f" ]]; then cp -p -- "$TARGET/$f" "$TARGET/$f.atd-backup"; fi
-  install -m 0644 "$SRC/$f" "$TARGET/$f"
-done
-# Find a common web worker account before applying ownership or ACLs.
-WEBUSER=""
-for u in www-data nginx apache; do if id "$u" >/dev/null 2>&1; then WEBUSER="$u"; break; fi; done
-if [[ -z "$WEBUSER" ]]; then echo "Installed files, but could not identify PHP/web worker user. Configure file access manually; do not chmod 777." >&2; exit 8; fi
-chown root:"$WEBUSER" "$TARGET/send-backup.php"
-chmod 0640 "$TARGET/send-backup.php"
-install -d -o "$WEBUSER" -g "$WEBUSER" -m 0700 /var/lib/atd-mikrotik-backup-studio
-# Extract only the configured BACKUP_DIR constant from generated PHP source.
-BACKUP_DIR="$(sed -n "s/^const BACKUP_DIR = '\(.*\)';$/\1/p" "$TARGET/send-backup.php" | head -n1)"
-if [[ -z "$BACKUP_DIR" ]]; then echo "Could not read BACKUP_DIR from generated PHP. Aborting." >&2; exit 9; fi
-case "$BACKUP_DIR" in /|/root|/home|/etc|/var|/usr|/opt|/tmp) echo "Refusing unsafe system directory as backup storage: $BACKUP_DIR" >&2; exit 9;; esac
-if [[ "$BACKUP_DIR" != /*/* || "$BACKUP_DIR" == *"/../"* || "$BACKUP_DIR" == */.. ]]; then echo "Unsafe backup directory path: $BACKUP_DIR" >&2; exit 9; fi
-if [[ ! -d "$BACKUP_DIR" ]]; then mkdir -p -- "$BACKUP_DIR"; chmod 0750 "$BACKUP_DIR"; fi
-if [[ "$BACKUP_DIR" == /root/* ]]; then
-  if ! command -v setfacl >/dev/null 2>&1; then echo "Panel installed, but setfacl is unavailable. Install ACL tools, then grant only traversal on /root and read access to the selected backup directory for $WEBUSER. Do not chmod 777." >&2; exit 10; fi
-  setfacl -m "u:$WEBUSER:--x" /root
-  setfacl -m "u:$WEBUSER:rwx" "$BACKUP_DIR"
-  find "$BACKUP_DIR" -maxdepth 1 -type f -name "*.backup" -exec setfacl -m "u:$WEBUSER:r--" {} \;
-  setfacl -d -m "u:$WEBUSER:r--" "$BACKUP_DIR"
-else
-  setfacl -m "u:$WEBUSER:rwx" "$BACKUP_DIR" 2>/dev/null || true
-  find "$BACKUP_DIR" -maxdepth 1 -type f -name "*.backup" -exec setfacl -m "u:$WEBUSER:r--" {} \; 2>/dev/null || true
-  setfacl -d -m "u:$WEBUSER:r--" "$BACKUP_DIR" 2>/dev/null || true
-fi
-if command -v runuser >/dev/null 2>&1; then
-  if ! runuser -u "$WEBUSER" -- test -r "$BACKUP_DIR" -a -w "$BACKUP_DIR" -a -x "$BACKUP_DIR"; then echo "Installed files, but $WEBUSER lacks required read/write/traverse access to $BACKUP_DIR. Review ACLs manually." >&2; exit 11; fi
-elif command -v sudo >/dev/null 2>&1; then
-  if ! sudo -u "$WEBUSER" test -r "$BACKUP_DIR" -a -w "$BACKUP_DIR" -a -x "$BACKUP_DIR"; then echo "Installed files, but $WEBUSER lacks required read/write/traverse access to $BACKUP_DIR. Review ACLs manually." >&2; exit 11; fi
-else
-  echo "Files installed, but cannot verify web-worker access (runuser/sudo unavailable). Check ACLs manually before testing." >&2
-fi
-cat <<EOF
-
-ATD files installed into: $TARGET
-Panel URL path: /$(basename "$TARGET")/send-backup.php
-Enter the existing website base URL as https://domain-or-server-IP (no path and no port; this project uses the existing standard web URL).
-Examples: https://example.com   https://203.0.113.10
-DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-read -r -p "Public base URL [https://$DEFAULT_IP]: " BASE_URL || true
-BASE_URL="${BASE_URL:-https://$DEFAULT_IP}"
-BASE_URL="${BASE_URL%/}"
-if [[ "$BASE_URL" =~ ^https?://[^/:]+$ ]]; then
-  echo "Panel URL: $BASE_URL/$(basename "$TARGET")/send-backup.php"
-else
-  echo "Could not construct URL. Use the existing site's URL plus /$(basename "$TARGET")/send-backup.php"
-fi
-No web-server vhost, TLS certificate, listening port, or existing certificate configuration was changed.
-Private backup directory: $BACKUP_DIR
-Backup directory access was granted only to the detected web worker user ($WEBUSER).
-If this server uses a custom PHP-FPM pool user, review the ACL before relying on the panel.
-
-GitHub server asset updates (no need to rerun the generator):
-  sudo bash install-server.sh --update "$TARGET"
-This updates compatible server assets from the public GitHub repository and preserves the current installed files if validation fails. For the generated PHP schema, PHP replacement is deliberately skipped until a schema-compatible migration is published; CSS/JS can still update.
-EOF
+for f in send-backup.php panel.css panel.js; do [[ -f "$SRC/$f" ]] || { echo "Missing $f; extract the complete generated package." >&2; exit 3; }; done
+TMP="$(mktemp)"; trap 'rm -f -- "$TMP"' EXIT
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/install-standalone.sh' -o "$TMP"
+[[ -s "$TMP" ]] || { echo 'Could not download the ATD standalone installer.' >&2; exit 4; }
+bash "$TMP" "$SRC"
 '@
     [System.IO.File]::WriteAllText((Join-Path $outDir 'install-server.sh'), $installServer, [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText((Join-Path $outDir 'panel.css'), $css, [System.Text.UTF8Encoding]::new($false))
