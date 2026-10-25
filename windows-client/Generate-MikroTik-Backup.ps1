@@ -667,6 +667,8 @@ FILES
 
 SFTP
 - The default remote directory is /root/uploads. If you enter a relative directory name such as amir, it resolves to /root/amir. An absolute path such as /data/backups is used as entered.
+- Backup files remain in the configured private SFTP directory; the PHP relay reads that configured path. The panel itself is installed separately under the existing website document root, in a URL folder derived from the selected SFTP directory basename (default /root/uploads => /uploads/send-backup.php). Keep the private backup directory outside the public document root.
+- The panel URL is intended to be https://domain-or-server-IP/<selected-folder>/send-backup.php. No port is needed when the existing site is served on the standard HTTPS port. The installer must not rewrite existing vhosts or certificates.
 - MikroTik does not create Linux directories. In SFTP-only mode, run the command in create-sftp-directory.txt once on the server.
 - SFTP success and remote-file completion are different checks. Telegram mode waits 10 seconds after SFTP and then PHP checks size and modification-time stability before sending.
 
