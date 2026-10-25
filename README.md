@@ -51,6 +51,10 @@ sudo bash server-deployment/install-server.sh /ABSOLUTE/EXISTING/WEBROOT/atd-bac
 
 Replace the path with a verified subdirectory under the existing HTTPS site's document root. Never guess the path, run unreviewed scripts on production, use `chmod 777`, or run PHP as root. Be especially cautious with backup directories under `/root`.
 
+## Architecture contract
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the required integration model: preserve the tested v3 SFTP client, generate per-customer scripts/configuration from EXE inputs, and fetch pinned non-secret panel assets from GitHub during server installation. This contract is not a claim that the full package is already synchronized or production-ready.
+
 ## Security
 
 - Never commit Telegram bot tokens, relay tokens, panel passwords, private keys, or real backup files.
