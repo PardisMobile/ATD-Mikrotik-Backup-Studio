@@ -49,9 +49,20 @@ php -r 'exit(extension_loaded("curl") ? 0 : 1);' || { echo 'PHP cURL is required
 id atdbackup >/dev/null 2>&1 || useradd --system --home-dir /opt/atd-mikrotik-backup-studio --shell /usr/sbin/nologin atdbackup
 APP=/opt/atd-mikrotik-backup-studio; STATE=/var/lib/atd-mikrotik-backup-studio; TLS=/etc/atd-mikrotik-backup-studio
 mkdir -p "$APP" "$STATE" "$TLS" "$BACKUP_DIR"; chmod 0750 "$APP"; chmod 0700 "$STATE" "$TLS"; chown atdbackup:atdbackup "$STATE"
+# Keep configuration and delivery state outside the versioned application directory.
+if [[ ! -s "$TLS/config.php" ]]; then
+  [[ -s "$SRC/config.php" ]] || { echo 'Missing generated private configuration.' >&2; exit 8; }
+  install -o root -g atdbackup -m 0640 "$SRC/config.php" "$TLS/config.php"
+else
+  echo 'Existing private configuration found; preserving first-run values and secrets.'
+fi
+php -l "$TLS/config.php" >/dev/null || { echo 'Private configuration syntax check failed.' >&2; exit 8; }
+grep -q "const RELAY_TOKEN" "$TLS/config.php" || { echo 'Private configuration is missing RELAY_TOKEN.' >&2; exit 8; }
+grep -q "const BACKUP_DIR" "$TLS/config.php" || { echo 'Private configuration is missing BACKUP_DIR.' >&2; exit 8; }
+
 for f in send-backup.php panel.css panel.js; do
   if [[ -e "$APP/$f" ]]; then cp -p "$APP/$f" "$APP/$f.backup.$(date +%Y%m%d%H%M%S)"; fi
-  # Keep customer-specific PHP credentials/state on re-runs; update static assets normally.
+  # Keep the live PHP application on re-install; the explicit updater handles versioned code updates.
   if [[ "$f" != send-backup.php || ! -e "$APP/send-backup.php" ]]; then install -m 0640 "$SRC/$f" "$APP/$f"; fi
 done
 chown -R root:atdbackup "$APP"; chmod 0640 "$APP/send-backup.php"; chmod 0644 "$APP/panel.css" "$APP/panel.js"
@@ -126,16 +137,8 @@ systemctl enable --now atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.s
 systemctl is-active --quiet atd-mikrotik-backup-php.service
 systemctl is-active --quiet atd-mikrotik-backup-tls.service
 
-FW='No common active firewall manager detected; no firewall rule changed.'
-if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi 'Status: active'; then
-  ufw allow "$PUBLIC_PORT/tcp" comment 'ATD MikroTik Backup Studio' >/dev/null; FW="UFW opened TCP $PUBLIC_PORT."
-elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
-  firewall-cmd --permanent --add-port="$PUBLIC_PORT/tcp" >/dev/null; firewall-cmd --reload >/dev/null; FW="firewalld opened TCP $PUBLIC_PORT."
-elif command -v iptables >/dev/null 2>&1 && iptables -S INPUT >/dev/null 2>&1; then
-  iptables -C INPUT -p tcp --dport "$PUBLIC_PORT" -m comment --comment ATD-MikroTik-Backup-Studio -j ACCEPT 2>/dev/null || iptables -A INPUT -p tcp --dport "$PUBLIC_PORT" -m comment --comment ATD-MikroTik-Backup-Studio -j ACCEPT
-  command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save >/dev/null 2>&1 || true
-  FW="iptables added TCP $PUBLIC_PORT rule at end of INPUT chain; earlier rules may still block it."
-fi
+# Do not mutate host-wide firewall policy automatically. The user/provider may need to allow this ATD port.
+FW="No firewall rules were changed. If remote access is required, allow TCP $PUBLIC_PORT in the host/provider firewall after reviewing existing policy."
 
 echo; echo 'ATD MikroTik Backup Studio installed.'
 echo "URL: https://$IP:$PUBLIC_PORT/"
