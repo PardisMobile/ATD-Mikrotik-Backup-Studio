@@ -22,7 +22,7 @@ Last reviewed: 2026-10-25.
 - Re-running the installer and verifying every config value, assigned port, state entry, and backup file remains unchanged.
 - Updating PHP/CSS/JS from GitHub and validating rollback after a deliberately invalid staged file.
 - A real MikroTik RouterOS 7 scheduled backup and SFTP transfer.
-- Actual Telegram bot delivery, duplicate-send behavior, the post-SFTP panel callback, actual Telegram delivery, duplicate-send behavior, and panel password-change flow.
+- Actual Telegram bot delivery, duplicate-send behavior, the Linux cron scanner, actual Telegram delivery, duplicate-send behavior, and panel password-change flow.
 - Certificate trust behavior for RouterOS and browser access on a public server with the intended domain/certificate.
 - Compatibility with all Linux distributions and existing host firewall/provider policies.
 
