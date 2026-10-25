@@ -609,9 +609,20 @@ cat <<EOF
 
 ATD files installed into: $TARGET
 Panel URL path: /$(basename "$TARGET")/send-backup.php
-Panel URL: https://YOUR-DOMAIN/$(basename "$TARGET")/send-backup.php
-Replace YOUR-DOMAIN with the domain already mapped to this website/document root. No port or global vhost was changed.
-Backup directory read/delete access was granted only to the detected web worker user ($WEBUSER), because the panel supports deleting selected backups.
+Enter the existing website base URL as https://domain-or-server-IP (no path and no port; this project uses the existing standard web URL).
+Examples: https://example.com   https://203.0.113.10
+DEFAULT_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+read -r -p "Public base URL [https://$DEFAULT_IP]: " BASE_URL || true
+BASE_URL="${BASE_URL:-https://$DEFAULT_IP}"
+BASE_URL="${BASE_URL%/}"
+if [[ "$BASE_URL" =~ ^https?://[^/:]+$ ]]; then
+  echo "Panel URL: $BASE_URL/$(basename "$TARGET")/send-backup.php"
+else
+  echo "Could not construct URL. Use the existing site's URL plus /$(basename "$TARGET")/send-backup.php"
+fi
+No web-server vhost, TLS certificate, listening port, or existing certificate configuration was changed.
+Private backup directory: $BACKUP_DIR
+Backup directory access was granted only to the detected web worker user ($WEBUSER).
 If this server uses a custom PHP-FPM pool user, review the ACL before relying on the panel.
 
 GitHub server asset updates (no need to rerun the generator):
