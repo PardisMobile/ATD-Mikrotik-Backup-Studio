@@ -588,7 +588,7 @@ curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-ti
 [[ -s "$TMP/install-standalone.sh" ]] || { echo 'Could not download the ATD runtime installer.' >&2; exit 5; }
 chmod 0600 "$TMP/install-standalone.sh"
 bash "$TMP/install-standalone.sh" "$TMP"
-'@@
+'@
     $installServer = $installServer.Replace('__PHP_SHA256__', $phpHash).
                                     Replace('__CSS_SHA256__', $cssHash).
                                     Replace('__JS_SHA256__', $jsHash).
