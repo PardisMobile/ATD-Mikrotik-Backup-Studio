@@ -48,10 +48,10 @@ php -r 'exit(extension_loaded("curl") ? 0 : 1);' || { echo 'PHP cURL is required
 
 id atdbackup >/dev/null 2>&1 || useradd --system --home-dir /opt/atd-mikrotik-backup-studio --shell /usr/sbin/nologin atdbackup
 APP=/opt/atd-mikrotik-backup-studio; STATE=/var/lib/atd-mikrotik-backup-studio; TLS=/etc/atd-mikrotik-backup-studio
-mkdir -p "$APP" "$STATE" "$TLS" "$BACKUP_DIR"
+mkdir -p "$APP" "$STATE/sessions" "$TLS" "$BACKUP_DIR"
 chmod 0750 "$APP"
-chmod 0700 "$STATE"
-chown atdbackup:atdbackup "$STATE"
+chmod 0700 "$STATE" "$STATE/sessions"
+chown -R atdbackup:atdbackup "$STATE"
 chown root:atdbackup "$TLS"
 chmod 0750 "$TLS"
 # Keep configuration and delivery state outside the versioned application directory.
@@ -88,12 +88,154 @@ for n in p:
 PY
 }
 # Preserve allocated ports on repeat runs. Avoid breaking a running deployment with a new URL.
-if [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+$' "$TLS/ports.env" && grep -Eq '^BACKEND_PORT=[0-9]+$' "$TLS/ports.env"; then
+if [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+
+[[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 && "$BACKEND_PORT" =~ ^[0-9]+$ && "$BACKEND_PORT" -ge 2000 && "$BACKEND_PORT" -le 19999 ]] || { echo 'Invalid stored port configuration.' >&2; exit 7; }
+IP=$(hostname -I 2>/dev/null | awk '{print $1}'); [[ -n "$IP" ]] || IP=127.0.0.1
+if [[ ! -s "$TLS/server.crt" || ! -s "$TLS/server.key" ]]; then
+  openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 -keyout "$TLS/server.key" -out "$TLS/server.crt" -subj "/CN=$IP" -addext "subjectAltName=IP:$IP" >/dev/null 2>&1
+  chmod 0600 "$TLS/server.key"; chmod 0644 "$TLS/server.crt"
+fi
+cat > /etc/systemd/system/atd-mikrotik-backup-php.service <<EOF
+[Unit]
+Description=ATD MikroTik Backup Studio PHP backend
+After=network.target
+[Service]
+User=atdbackup
+Group=atdbackup
+WorkingDirectory=/opt/atd-mikrotik-backup-studio
+ExecStart=/usr/bin/php -d session.save_path=/var/lib/atd-mikrotik-backup-studio/sessions -d session.cookie_secure=1 -d expose_php=0 -S 127.0.0.1:$BACKEND_PORT -t /opt/atd-mikrotik-backup-studio
+Restart=on-failure
+RestartSec=3
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/atd-mikrotik-backup-studio $BACKUP_DIR
+[Install]
+WantedBy=multi-user.target
+EOF
+cat > /etc/systemd/system/atd-mikrotik-backup-tls.service <<EOF
+[Unit]
+Description=ATD MikroTik Backup Studio TLS endpoint
+After=network.target atd-mikrotik-backup-php.service
+Requires=atd-mikrotik-backup-php.service
+[Service]
+EnvironmentFile=$TLS/ports.env
+ExecStart=/usr/bin/socat OPENSSL-LISTEN:$PUBLIC_PORT,bind=0.0.0.0,reuseaddr,fork,cert=$TLS/server.crt,key=$TLS/server.key,verify=0 TCP:127.0.0.1:$BACKEND_PORT
+Restart=on-failure
+RestartSec=3
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
+systemctl is-active --quiet atd-mikrotik-backup-php.service
+systemctl is-active --quiet atd-mikrotik-backup-tls.service
+
+# Install the ATD-only updater. It never changes the saved customer configuration or backup state.
+UPDATE_TMP=$(mktemp)
+trap 'rm -f -- "$UPDATE_TMP"' EXIT
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+  'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/update-standalone.sh' -o "$UPDATE_TMP"
+[[ -s "$UPDATE_TMP" ]] || { echo 'Could not download the ATD updater; initial install is active, but the updater was not installed.' >&2; exit 9; }
+bash -n "$UPDATE_TMP" || { echo 'Downloaded updater failed shell syntax validation.' >&2; exit 9; }
+install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backup-update
+
+# Do not mutate host-wide firewall policy automatically. The user/provider may need to allow this ATD port.
+FW="No firewall rules were changed. If remote access is required, allow TCP $PUBLIC_PORT in the host/provider firewall after reviewing existing policy."
+
+echo; echo 'ATD MikroTik Backup Studio installed.'
+echo "URL: https://$IP:$PUBLIC_PORT/"
+echo 'Certificate: self-signed; browser warning expected, TLS traffic is encrypted.'
+echo "Firewall: $FW"
+echo "Backup directory: $BACKUP_DIR"
+echo 'Existing web-server configurations and ports were not changed.'
+ "$TLS/ports.env" && grep -Eq '^BACKEND_PORT=[0-9]+
+[[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 && "$BACKEND_PORT" =~ ^[0-9]+$ && "$BACKEND_PORT" -ge 2000 && "$BACKEND_PORT" -le 19999 ]] || { echo 'Invalid stored port configuration.' >&2; exit 7; }
+IP=$(hostname -I 2>/dev/null | awk '{print $1}'); [[ -n "$IP" ]] || IP=127.0.0.1
+if [[ ! -s "$TLS/server.crt" || ! -s "$TLS/server.key" ]]; then
+  openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 -keyout "$TLS/server.key" -out "$TLS/server.crt" -subj "/CN=$IP" -addext "subjectAltName=IP:$IP" >/dev/null 2>&1
+  chmod 0600 "$TLS/server.key"; chmod 0644 "$TLS/server.crt"
+fi
+cat > /etc/systemd/system/atd-mikrotik-backup-php.service <<EOF
+[Unit]
+Description=ATD MikroTik Backup Studio PHP backend
+After=network.target
+[Service]
+User=atdbackup
+Group=atdbackup
+WorkingDirectory=/opt/atd-mikrotik-backup-studio
+ExecStart=/usr/bin/php -d session.cookie_secure=1 -d expose_php=0 -S 127.0.0.1:$BACKEND_PORT -t /opt/atd-mikrotik-backup-studio
+Restart=on-failure
+RestartSec=3
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/atd-mikrotik-backup-studio $BACKUP_DIR
+[Install]
+WantedBy=multi-user.target
+EOF
+cat > /etc/systemd/system/atd-mikrotik-backup-tls.service <<EOF
+[Unit]
+Description=ATD MikroTik Backup Studio TLS endpoint
+After=network.target atd-mikrotik-backup-php.service
+Requires=atd-mikrotik-backup-php.service
+[Service]
+EnvironmentFile=$TLS/ports.env
+ExecStart=/usr/bin/socat OPENSSL-LISTEN:$PUBLIC_PORT,bind=0.0.0.0,reuseaddr,fork,cert=$TLS/server.crt,key=$TLS/server.key,verify=0 TCP:127.0.0.1:$BACKEND_PORT
+Restart=on-failure
+RestartSec=3
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
+systemctl is-active --quiet atd-mikrotik-backup-php.service
+systemctl is-active --quiet atd-mikrotik-backup-tls.service
+
+# Install the ATD-only updater. It never changes the saved customer configuration or backup state.
+UPDATE_TMP=$(mktemp)
+trap 'rm -f -- "$UPDATE_TMP"' EXIT
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+  'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/update-standalone.sh' -o "$UPDATE_TMP"
+[[ -s "$UPDATE_TMP" ]] || { echo 'Could not download the ATD updater; initial install is active, but the updater was not installed.' >&2; exit 9; }
+bash -n "$UPDATE_TMP" || { echo 'Downloaded updater failed shell syntax validation.' >&2; exit 9; }
+install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backup-update
+
+# Do not mutate host-wide firewall policy automatically. The user/provider may need to allow this ATD port.
+FW="No firewall rules were changed. If remote access is required, allow TCP $PUBLIC_PORT in the host/provider firewall after reviewing existing policy."
+
+echo; echo 'ATD MikroTik Backup Studio installed.'
+echo "URL: https://$IP:$PUBLIC_PORT/"
+echo 'Certificate: self-signed; browser warning expected, TLS traffic is encrypted.'
+echo "Firewall: $FW"
+echo "Backup directory: $BACKUP_DIR"
+echo 'Existing web-server configurations and ports were not changed.'
+ "$TLS/ports.env"; then
   # shellcheck disable=SC1090
   source "$TLS/ports.env"
 else
-  PUBLIC_PORT=$(freeport 20000 60000); BACKEND_PORT=$(freeport 2000 19999)
-  [[ -n "$PUBLIC_PORT" && -n "$BACKEND_PORT" ]] || { echo 'No free port found.' >&2; exit 7; }
+  PUBLIC_PORT=$(sed -n 's/^const PUBLIC_PORT = \\([0-9]\\+\\);$/\\1/p' "$SRC/config.php" | head -n1)
+  [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 ]] || { echo 'Missing/invalid PUBLIC_PORT in generated configuration.' >&2; exit 7; }
+  python3 - "$PUBLIC_PORT" <<'PYPORT'
+import socket,sys
+port=int(sys.argv[1])
+s=socket.socket()
+try:
+    s.bind(('0.0.0.0',port))
+except OSError:
+    print(f'Configured public port {port} is already in use. Choose another port in the Windows generator.',file=sys.stderr)
+    raise SystemExit(1)
+finally:
+    s.close()
+PYPORT
+  BACKEND_PORT=$(freeport 2000 19999)
+  [[ -n "$BACKEND_PORT" ]] || { echo 'No free backend port found.' >&2; exit 7; }
   printf 'PUBLIC_PORT=%s\nBACKEND_PORT=%s\n' "$PUBLIC_PORT" "$BACKEND_PORT" > "$TLS/ports.env"
   chmod 0600 "$TLS/ports.env"
 fi
