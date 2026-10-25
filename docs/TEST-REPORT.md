@@ -43,5 +43,6 @@ Do not describe the project as production-ready until the latest CI checks pass 
 - Fixed the generated bootstrap to resolve one GitHub commit SHA before downloading assets and pass that same SHA to the runtime installer.
 - Fixed runtime installer updater download to use the same pinned commit when invoked from the generated bootstrap; manual invocation resolves a commit before downloading the updater.
 - Fixed updater asset downloads to use a single immutable commit and deferred legacy service cleanup until downloaded assets pass validation.
+- Fixed a re-install mismatch: the runtime installer now derives `BACKUP_DIR` from the preserved private config, not the newly generated package. This prevents the service sandbox/ACLs from pointing at a different directory than the app actually uses.
 - Updated CI invariants and GitHub update documentation to reflect this architecture.
 - Still required: inspect the push-triggered workflow result for the newest commit, execute the generated PowerShell on Windows, and run clean-install/reinstall/update/rollback tests on a disposable Linux VM. No real-server end-to-end test has been performed in this review.
