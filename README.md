@@ -69,3 +69,14 @@ Read [docs/TEST-REPORT.md](docs/TEST-REPORT.md) and [Persian installation notes]
 ## License
 
 No license has been selected yet. Standard copyright restrictions apply unless a license is added.
+
+
+## GitHub-based server updates
+
+For an already installed server panel, see [GitHub update instructions](docs/GITHUB-UPDATES.md). The optional update command is:
+
+```bash
+sudo bash install-server.sh --update /absolute/path/to/installed/panel
+```
+
+The updater stages files, backs up current assets, checks PHP syntax, and carries matching customer-specific constants into the updated PHP file. This is currently a development updater using the repository's `main` branch; review the test report before production use.
