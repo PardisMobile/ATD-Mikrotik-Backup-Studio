@@ -41,9 +41,9 @@ rollback(){
   chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true
 }
-for f in send-backup.php panel.css panel.js; do install -o root -g atdbackup -m 0640 "$TMP/$f" "$APP/$f.new"; done
-install -m 0644 "$TMP/panel.css" "$APP/panel.css.new"
-install -m 0644 "$TMP/panel.js" "$APP/panel.js.new"
+install -o root -g atdbackup -m 0640 "$TMP/send-backup.php" "$APP/send-backup.php.new"
+install -o root -g atdbackup -m 0644 "$TMP/panel.css" "$APP/panel.css.new"
+install -o root -g atdbackup -m 0644 "$TMP/panel.js" "$APP/panel.js.new"
 mv -f "$APP/send-backup.php.new" "$APP/send-backup.php"
 mv -f "$APP/panel.css.new" "$APP/panel.css"
 mv -f "$APP/panel.js.new" "$APP/panel.js"
