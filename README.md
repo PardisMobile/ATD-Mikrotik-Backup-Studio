@@ -22,7 +22,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 2. Choose **2) SFTP + Telegram panel** to enable the complete flow (SFTP upload, panel, and Telegram). Mode **1** is SFTP-only and does not install a panel.
 3. Enter the Linux server's hostname/IP and the existing SFTP username/password that already work for you. SFTP uses port **22**.
 4. Set the backup directory to a dedicated absolute Linux path. For example, use `/root/Uploads` if that is the real directory your existing SFTP workflow uses. Do not enter a chroot-relative path.
-5. Set the public HTTPS port (default `24443`) and a panel password of at least 12 characters. Telegram credentials are configured after installation from the panel; the generator no longer asks for a Bot Token or Chat ID.
+5. Set the public HTTPS port (default `24443`) and a panel password of at least 8 characters. Telegram credentials are configured after installation from the panel; the generator no longer asks for a Bot Token or Chat ID.
 6. Choose the backup schedule and whether to retain local router backups.
 
 ### 2. Install the panel on the same Linux server
