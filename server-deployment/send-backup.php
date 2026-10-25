@@ -231,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' || (!empty($_SESSION['admin']) && $_SER
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit('METHOD_NOT_ALLOWED'); }
 $provided = $_SERVER['HTTP_X_BACKUP_TOKEN'] ?? '';
-if (!hash_equals(RELAY_TOKEN, $provided)) { http_response_code(403); exit('FORBIDDEN'); }
+if (!defined('RELAY_TOKEN') || !hash_equals((string)RELAY_TOKEN, $provided)) { http_response_code(403); exit('FORBIDDEN'); }
 $tg = telegram_settings();
 if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) { http_response_code(503); exit('TELEGRAM_NOT_CONFIGURED'); }
 $input = json_decode(file_get_contents('php://input'), true);
