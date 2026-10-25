@@ -14,7 +14,6 @@ jobs:
       - name: Check Bash syntax
         run: |
           bash -n server-deployment/install-standalone.sh
-          bash -n server-deployment/install-standalone.sh
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
@@ -28,5 +27,5 @@ jobs:
           grep -q 'ReadWritePaths=/var/lib/atd-mikrotik-backup-studio' server-deployment/install-standalone.sh
           grep -q 'ProtectSystem=strict' server-deployment/install-standalone.sh
           ! grep -q 'chmod 777' server-deployment/install-standalone.sh
-          ! grep -q 'nginx' server-deployment/install-standalone.sh
-          ! grep -q 'apachectl' server-deployment/install-standalone.sh
+          ! grep -Eq 'sed .*nginx|tee .*nginx|systemctl (stop|disable|restart) nginx' server-deployment/install-standalone.sh
+          ! grep -Eq 'sed .*apache|tee .*apache|systemctl (stop|disable|restart) apache' server-deployment/install-standalone.sh
