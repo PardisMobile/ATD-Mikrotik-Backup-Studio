@@ -79,7 +79,7 @@ $remoteDir = $remoteDir.TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($remoteDir)) { $remoteDir = '/' }
 # Relative names resolve under /root, as documented for this product.
 if (-not $remoteDir.StartsWith('/')) { $remoteDir = '/root/' + $remoteDir.TrimStart('/') }
-if ($remoteDir -notmatch '^/[A-Za-z0-9._/-]+
+if ($remoteDir -notmatch '^/[A-Za-z0-9._/-]+$' -or $remoteDir -eq '/' -or $remoteDir -match '(^|/)\.\.?(/|$)') { throw 'Use a safe absolute SFTP directory containing only letters, numbers, dot, underscore, dash and slash; no spaces or dot-dot segments.' }
 $panelFolderName = Split-Path -Leaf $remoteDir.TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($panelFolderName) -or $panelFolderName -in @('.', '..') -or $panelFolderName -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw 'Remote directory must end with a simple folder name, e.g. /root/uploads or /Upload.' }
 $panelPath = '/' + $panelFolderName + '/send-backup.php'
