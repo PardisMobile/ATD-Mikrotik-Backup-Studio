@@ -78,6 +78,12 @@ jobs:
           subprocess.run(["bash", "-n", str(path)], check=True)
           if "send-backup.php panel.css panel.js" in installer:
               raise SystemExit("Bootstrap must not require separate panel files from the user")
+          if "api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main" not in installer:
+              raise SystemExit("Bootstrap must resolve one immutable source commit before downloading assets")
+          if "ATD_SOURCE_COMMIT=\"$COMMIT\" bash \"$TMP/install-standalone.sh\" \"$TMP\"" not in installer:
+              raise SystemExit("Bootstrap must pass the resolved commit to the runtime installer")
+          if 'raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment' in installer:
+              raise SystemExit("Bootstrap must not fetch individually mutable main-branch assets")
           generator = source
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           router_start = source.index("$routerScript = @\"")
@@ -98,6 +104,14 @@ jobs:
               raise SystemExit("Do not add a text-only test or per-file send buttons")
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
+          if 'raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment' in updater:
+              raise SystemExit("Updater must fetch assets from one immutable commit snapshot")
+          if "api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main" not in updater:
+              raise SystemExit("Updater must resolve the immutable source commit before staging assets")
+          if "Do not disable legacy services or touch live files until all replacement assets validate." not in updater:
+              raise SystemExit("Updater must stage and validate before modifying live services")
+          if "ATD_SOURCE_COMMIT" not in runtime or "SOURCE_COMMIT" not in runtime:
+              raise SystemExit("Runtime installer must use the bootstrap's pinned source commit for updater download")
           for script in (runtime, updater):
               if "/etc/cron.d/atd-mikrotik-backup-telegram" not in script or "--scan-backups" not in script:
                   raise SystemExit("Installer/updater must install the dedicated ATD cron scan")
