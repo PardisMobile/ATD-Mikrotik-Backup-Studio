@@ -81,7 +81,7 @@ jobs:
           router_start = source.index("$routerScript = @\"")
           router_end = source.index("\n\"@", router_start)
           router_script = source[router_start:router_end]
-          if "/tool fetch" not in router_script or "X-Backup-Token" not in router_script or "/send-backup.php" not in router_script:
+          if "/tool fetch" not in source or "X-Backup-Token" not in source or "/send-backup.php" not in source:
               raise SystemExit("Generated RouterOS script must notify the authenticated panel after SFTP")
           if "api.telegram.org" in router_script or "telegramOK" in router_script:
               raise SystemExit("RouterOS must never call Telegram directly")

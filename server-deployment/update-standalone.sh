@@ -8,6 +8,10 @@ STATE=/var/lib/atd-mikrotik-backup-studio
 BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
 for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installation not found ($path)." >&2; exit 3; }; done
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
+if ! grep -q "const TRIGGER_TOKEN" "$TLS/config.php"; then
+  echo 'This installation predates the authenticated post-SFTP callback. Generate a fresh package in the Windows generator and run its private install.sh once; the updater cannot infer the trigger secret from PHP assets.' >&2
+  exit 3
+fi
 # Remove legacy automatic scanners/workers; the new flow is triggered by the post-SFTP callback.
 LEGACY_UNITS=(
   atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer

@@ -55,7 +55,7 @@ The generator also creates `create-sftp-directory.txt`, containing a command for
 - `create-sftp-directory.txt`: command to create the configured SFTP directory.
 
 ## Update
-Run `sudo atd-mikrotik-backup-update` on the Linux server. The updater stages and syntax-checks new application code, backs up the previous code, and preserves private configuration, delivery state, and uploaded backups. It restarts only the ATD PHP service.
+For an installation created before authenticated post-SFTP callbacks were introduced, generate a fresh package in the Windows generator and run its private `install.sh` once; this adds the callback token without overwriting existing panel settings and removes obsolete scanner/timer units. After that, run `sudo atd-mikrotik-backup-update` for ordinary application-only updates. The updater stages and syntax-checks new application code, backs up the previous code, and preserves private configuration, delivery state, and uploaded backups. It restarts only the ATD PHP service.
 
 ## Safety and limitations
 - ATD uses dedicated paths, service names, and ports. It does not edit Nginx/Apache configuration or automatically change host-wide firewall rules.

@@ -346,7 +346,7 @@ function send_telegram_file(string $name, bool $force = false): array {
     if ($path === false || dirname($path) !== $base || !is_file($path) || !is_readable($path)) return [false, 'FILE_NOT_FOUND'];
     $deadline=time()+MAX_WAIT_SECONDS; $stable=0; $lastSize=-1;
     do {
-        clearstatcache(true,$path); $sz=@filesize($path); $mt=@filemtime($path);
+        clearstatcache(true,$path); $sz=@filesize($path);
         if ($sz === false || $sz < 1) $stable=0;
         elseif ($sz === $lastSize) $stable++;
         else $stable=0;
@@ -476,14 +476,12 @@ if (!is_string($name) || basename($name) !== $name || !preg_match('/\\A[A-Za-z0-
 }
 [$ok, $message] = send_telegram_file($name, false);
 if ($ok) { http_response_code(200); exit('TELEGRAM_OK'); }
-$status = match ($message) {
-    'TELEGRAM_NOT_CONFIGURED' => 503,
-    'FILE_NOT_FOUND' => 404,
-    'FILE_NOT_STABLE' => 425,
-    'FILE_SIZE_REJECTED' => 413,
-    'INVALID_FILENAME' => 400,
-    default => 502,
-};
+if ($message === 'TELEGRAM_NOT_CONFIGURED') $status = 503;
+elseif ($message === 'FILE_NOT_FOUND') $status = 404;
+elseif ($message === 'FILE_NOT_STABLE') $status = 425;
+elseif ($message === 'FILE_SIZE_REJECTED') $status = 413;
+elseif ($message === 'INVALID_FILENAME') $status = 400;
+else $status = 502;
 http_response_code($status);
 exit($message);
 
