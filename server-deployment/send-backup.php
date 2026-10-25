@@ -5,7 +5,7 @@ const STABILITY_CHECKS = 3;
 const STABILITY_INTERVAL_SECONDS = 2;
 const MAX_WAIT_SECONDS = 90;
 
-session_name_guard();
+if (PHP_SAPI !== 'cli') session_name_guard();
 
 function session_name_guard(): void {
     ini_set('session.use_strict_mode', '1');
@@ -184,6 +184,45 @@ function format_bytes(int $bytes): string {
     $units=['KB','MB','GB','TB']; $value=$bytes/1024; $i=0;
     while($value>=1024 && $i<count($units)-1){$value/=1024;$i++;}
     return number_format($value, $value<10?1:0).' '.$units[$i];
+}
+
+if (PHP_SAPI === 'cli' && in_array('--worker', $argv ?? [], true)) {
+    $marker = '/var/lib/atd-mikrotik-backup-studio/worker-started-at';
+    if (!is_file($marker)) {
+        @file_put_contents($marker, (string)time(), LOCK_EX);
+        exit(0); // First run establishes a baseline; never bulk-send historical backups.
+    }
+    $startedAt = (int)trim((string)@file_get_contents($marker));
+    if ($startedAt < 1) { fwrite(STDERR, "Invalid worker start marker.\\n"); exit(1); }
+    $tg = telegram_settings();
+    if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) {
+        fwrite(STDOUT, "Telegram is not configured; automatic delivery skipped.\\n");
+        exit(0);
+    }
+    $base = realpath(BACKUP_DIR);
+    if ($base === false || !is_readable($base)) { fwrite(STDERR, "Backup directory is not readable.\\n"); exit(1); }
+    $state = load_state();
+    foreach (glob($base . DIRECTORY_SEPARATOR . '*.backup') ?: [] as $path) {
+        if (!is_file($path) || !is_readable($path)) continue;
+        $name = basename($path);
+        $mtime = @filemtime($path);
+        if ($mtime === false || $mtime < $startedAt) continue;
+        if (!preg_match('/\\A[A-Za-z0-9_. -]+\\.backup\\z/', $name)) {
+            fwrite(STDERR, "Skipped unsupported backup filename: " . $name . "\\n");
+            continue;
+        }
+        clearstatcache(true, $path);
+        $hash = @hash_file('sha256', $path);
+        if (!is_string($hash)) continue;
+        $entry = $state[$name] ?? [];
+        if (($entry['sha256'] ?? '') === $hash && ($entry['status'] ?? '') === 'sent') continue;
+        $lastAttempt = strtotime((string)($entry['failed_at'] ?? $entry['attempted_at'] ?? '')) ?: 0;
+        if (($entry['sha256'] ?? '') === $hash && ($entry['status'] ?? '') === 'failed' && $lastAttempt > time() - 900) continue;
+        [$ok, $message] = send_telegram_file($name, false);
+        fwrite($ok ? STDOUT : STDERR, $name . ': ' . $message . "\\n");
+        $state = load_state();
+    }
+    exit(0);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' || (!empty($_SESSION['admin']) && $_SERVER['REQUEST_METHOD'] === 'POST') || (!empty($_POST['login']) && $_SERVER['REQUEST_METHOD'] === 'POST')) {
