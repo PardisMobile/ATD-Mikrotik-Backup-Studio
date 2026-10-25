@@ -41,7 +41,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 ### 4. Verify the complete flow
 - Confirm a new `.backup` file appears in the configured server directory.
 - Sign in to the panel and confirm that the same file is listed.
-- Confirm the server-side scanner timer sends a newly uploaded backup to Telegram and the panel's delivery status updates. This may take up to about a minute after SFTP completes.
+- Confirm that after SFTP completes, RouterOS notifies the panel endpoint and the server sends the stable backup to Telegram. Delivery starts after two stable-size intervals (about four seconds).
 - In the panel, test manual send/retry on a test file.
 - Test deletion only with a disposable test backup and confirm the selected file disappears.
 - If a file does not appear, check the RouterOS log, SFTP path/permissions, the ATD PHP/TLS services, and the panel callback response before changing any existing SFTP configuration.
@@ -55,7 +55,7 @@ The generator also creates `create-sftp-directory.txt`, containing a command for
 - `create-sftp-directory.txt`: command to create the configured SFTP directory.
 
 ## Update
-For an installation created before authenticated post-SFTP callbacks were introduced, generate a fresh package in the Windows generator and run its private `install.sh` once; this adds the callback token without overwriting existing panel settings and removes obsolete scanner/timer units. After that, run `sudo atd-mikrotik-backup-update` for ordinary application-only updates. The updater stages and syntax-checks new application code, backs up the previous code, and preserves private configuration, delivery state, and uploaded backups. It restarts only the ATD PHP service.
+For an installation created before authenticated post-SFTP callbacks were introduced, generate a fresh package in the Windows generator and run its private `install.sh` once. It adds the callback token without overwriting existing panel settings, removes obsolete scanner/timer units, and automatically updates the application code on an existing installation. Later application-only updates can use `sudo atd-mikrotik-backup-update`. The updater stages and syntax-checks new application code, backs up the previous code, and preserves private configuration, delivery state, and uploaded backups. It restarts only the ATD PHP service.
 
 ## Safety and limitations
 - ATD uses dedicated paths, service names, and ports. It does not edit Nginx/Apache configuration or automatically change host-wide firewall rules.

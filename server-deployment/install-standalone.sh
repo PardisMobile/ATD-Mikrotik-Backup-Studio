@@ -21,7 +21,11 @@ fi
 
 # Do not try to identify third-party panels or web stacks. Only recognize our own service
 # for safe re-install behavior; all third-party services/configuration remain out of scope.
-if systemctl is-active --quiet atd-mikrotik-backup-php.service 2>/dev/null; then echo 'Existing ATD installation detected; keeping its panel configuration and assigned ports.'; fi
+EXISTING_INSTALL=0
+if systemctl is-active --quiet atd-mikrotik-backup-php.service 2>/dev/null || [[ -s /opt/atd-mikrotik-backup-studio/send-backup.php ]]; then
+  EXISTING_INSTALL=1
+  echo 'Existing ATD installation detected; keeping its panel configuration and assigned ports.'
+fi
 
 # Install only when required tools/extensions are missing.
 NEED_PACKAGES=0
@@ -185,6 +189,11 @@ curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-ti
 [[ -s "$UPDATE_TMP" ]] || { echo 'Could not download the ATD updater; initial install is active, but the updater was not installed.' >&2; exit 9; }
 bash -n "$UPDATE_TMP" || { echo 'Downloaded updater failed shell syntax validation.' >&2; exit 9; }
 install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backup-update
+
+# On an existing installation, run the validated updater now so legacy worker code is removed too.
+if [[ "$EXISTING_INSTALL" == "1" ]]; then
+  /usr/local/sbin/atd-mikrotik-backup-update
+fi
 
 # Do not mutate host-wide firewall policy automatically. The user/provider may need to allow this ATD port.
 FW="No firewall rules were changed. If remote access is required, allow TCP $PUBLIC_PORT in the host/provider firewall after reviewing existing policy."

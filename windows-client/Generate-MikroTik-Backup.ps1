@@ -163,7 +163,7 @@ $passEsc = Escape-RouterString $sftpPass
 $dirEsc = Escape-RouterString $remoteDir
 
 $telegramBlock = if ($useTelegram) {
-    $relayToken = Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpHost.ToLowerInvariant() + ":" + $sftpUser + ":" + $sftpPass)
+    $relayToken = Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpUser + ":" + $sftpPass)
     $relayTokenEsc = Escape-RouterString $relayToken
     @(
         ':if ($sftpOK) do={'
@@ -494,7 +494,7 @@ exit($message);
 declare(strict_types=1);
 const TELEGRAM_BOT_TOKEN = '';
 const TELEGRAM_CHAT_ID = '';
-const TRIGGER_TOKEN = '$(Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpHost.ToLowerInvariant() + ":" + $sftpUser + ":" + $sftpPass))';
+const TRIGGER_TOKEN = '$(Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpUser + ":" + $sftpPass))';
 const PANEL_PASSWORD_SALT = '$passwordSalt';
 const PANEL_PASSWORD_HASH = '$panelPasswordHash';
 const BACKUP_DIR = '$pathPhp';
