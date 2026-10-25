@@ -15,43 +15,35 @@ jobs:
           sudo apt-get install -y php-cli
       - name: Check PHP syntax
         run: |
-          php -l server-deployment/send-backup.php
-          bash -n server-deployment/install-standalone.sh
-          bash -n server-deployment/update-standalone.sh
           python3 - <<'PY'
           from pathlib import Path
           source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
-          start = source.index("$php = @'") + len("$php = @'")
+          marker = "$php = @'"
+          start = source.index(marker) + len(marker)
+          start = source.index("\n", start) + 1
           end = source.index("\n'@", start)
           php = source[start:end].lstrip()
-          for key, value in {
-              "__RELAY_TOKEN__": "test-relay-token",
-              "__BOT_TOKEN__": "123456:test-bot-token",
-              "__CHAT_ID__": "123456789",
-              "__PANEL_PASSWORD_SALT__": "0123456789abcdef0123456789abcdef",
-              "__PANEL_PASSWORD_HASH__": "0" * 64,
-              "__BACKUP_DIR__": "/root/uploads",
-              "__MAX_BYTES__": str(45 * 1024 * 1024),
-          }.items():
-              php = php.replace(key, value)
           Path("/tmp/atd-generated-panel-lint.php").write_text(php, encoding="utf-8")
           PY
+          php -l server-deployment/send-backup.php
           php -l /tmp/atd-generated-panel-lint.php
       - name: Verify canonical assets and generated bootstrap
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re, subprocess
+          import subprocess
           source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
           def here_string(name):
-              start = source.index(f"${name} = @'") + len(f"${name} = @'\\n")
-              end = source.index("\\n'@", start)
-              return source[start:end]
+              marker = "$" + name + " = @'"
+              start = source.index(marker) + len(marker)
+              start = source.index("\n", start) + 1
+              end = source.index("\n'@", start)
+              return source[start:end].rstrip("\r\n")
           for name, path in (("php", "server-deployment/send-backup.php"),
                              ("css", "server-deployment/panel.css"),
                              ("js", "server-deployment/panel.js")):
-              embedded = here_string(name).rstrip("\\r\\n")
-              canonical = Path(path).read_text(encoding="utf-8").rstrip("\\r\\n")
+              embedded = here_string(name)
+              canonical = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
               if embedded != canonical:
                   raise SystemExit(f"Embedded {name} template differs from canonical {path}")
           installer = here_string("installServer")
@@ -73,5 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Check installer syntax
-        run: bash -n server-deployment/install-standalone.sh
+      - name: Check installer and updater syntax
+        run: |
+          bash -n server-deployment/install-standalone.sh
+          bash -n server-deployment/update-standalone.sh
