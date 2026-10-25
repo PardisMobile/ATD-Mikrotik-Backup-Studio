@@ -8,6 +8,8 @@ STATE=/var/lib/atd-mikrotik-backup-studio
 BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
 for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installation not found ($path)." >&2; exit 3; }; done
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
+# Add the worker baseline only if this older installation does not already have one.
+if [[ ! -s "$STATE/worker-started-at" ]]; then date +%s > "$STATE/worker-started-at"; chown atdbackup:atdbackup "$STATE/worker-started-at"; chmod 0600 "$STATE/worker-started-at"; fi
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI is required; no packages were installed.' >&2; exit 4; }
 
@@ -34,6 +36,9 @@ for f in send-backup.php panel.css panel.js; do
 done
 rollback(){
   echo 'Update failed; restoring previous ATD application files.' >&2
+  systemctl stop atd-mikrotik-backup-telegram-worker.timer 2>/dev/null || true
+  rm -f /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer
+  systemctl daemon-reload 2>/dev/null || true
   for f in send-backup.php panel.css panel.js; do
     if [[ -f "$BACKUP/$f" ]]; then cp -p "$BACKUP/$f" "$APP/$f"
     else rm -f -- "$APP/$f"; fi
@@ -52,10 +57,40 @@ mv -f "$APP/panel.js.new" "$APP/panel.js"
 chown root:atdbackup "$APP/send-backup.php"
 chmod 0640 "$APP/send-backup.php"
 chmod 0644 "$APP/panel.css" "$APP/panel.js"
+cat > /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service <<EOF
+[Unit]
+Description=ATD MikroTik Backup Studio automatic Telegram delivery
+After=network-online.target atd-mikrotik-backup-php.service
+Wants=network-online.target
+[Service]
+Type=oneshot
+User=atdbackup
+Group=atdbackup
+WorkingDirectory=$APP
+ExecStart=/usr/bin/php -d expose_php=0 $APP/send-backup.php --worker
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=$STATE $(php -r 'require $argv[1]; echo BACKUP_DIR;' "$TLS/config.php")
+EOF
+cat > /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer <<'EOF'
+[Unit]
+Description=Check for new ATD MikroTik backups to send to Telegram
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+Persistent=true
+Unit=atd-mikrotik-backup-telegram-worker.service
+[Install]
+WantedBy=timers.target
+EOF
+systemctl daemon-reload
+systemctl enable atd-mikrotik-backup-telegram-worker.timer
 if ! php -l "$APP/send-backup.php" >/dev/null || ! systemctl restart atd-mikrotik-backup-php.service || ! systemctl is-active --quiet atd-mikrotik-backup-php.service; then
   rollback
   exit 7
 fi
+systemctl start atd-mikrotik-backup-telegram-worker.timer
 echo "ATD application updated successfully."
 echo "Private configuration preserved: $TLS/config.php"
 echo "Delivery state and backups preserved: $STATE and configured backup directory."
