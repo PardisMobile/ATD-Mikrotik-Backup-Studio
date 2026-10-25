@@ -201,33 +201,15 @@ if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
   chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
   chmod 0600 "$STATE/telegram-scan-started-at"
 fi
-# Install a root-owned, one-shot service so the restricted panel account can request
-# only this validated Cron update without disabling NoNewPrivileges on the web service.
+# The root-owned apply job reads the validated persistent schedule and only rewrites
+# ATD's own scan Cron file when its effective contents change.
 install -o root -g root -m 0750 "$SRC/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
-cat > /etc/systemd/system/atd-mikrotik-backup-cron.service <<'UNIT'
-[Unit]
-Description=Apply ATD MikroTik Backup Studio Cron schedule
-[Service]
-Type=oneshot
-User=root
-Group=root
-ExecStart=/usr/local/sbin/atd-mikrotik-backup-cron --apply
-ProtectSystem=strict
-ReadWritePaths=/etc/cron.d
-PrivateTmp=true
-NoNewPrivileges=true
-UNIT
-command -v visudo >/dev/null 2>&1 || { echo 'visudo is required to validate the ATD sudoers rule.' >&2; exit 10; }
-SUDOERS_TMP=$(mktemp)
-trap 'rm -f -- "$SUDOERS_TMP"' EXIT
-printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/bin/systemctl start atd-mikrotik-backup-cron.service' > "$SUDOERS_TMP"
-chmod 0440 "$SUDOERS_TMP"
-visudo -cf "$SUDOERS_TMP" >/dev/null
-install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/atd-mikrotik-backup-cron
-rm -f -- "$SUDOERS_TMP"
-trap - EXIT
-systemctl daemon-reload
-systemctl start atd-mikrotik-backup-cron.service
+cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
+* * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
+CRON
+chown root:root /etc/cron.d/atd-mikrotik-backup-apply
+chmod 0644 /etc/cron.d/atd-mikrotik-backup-apply
+/usr/local/sbin/atd-mikrotik-backup-cron --apply
 
 
 # Install the ATD-only updater. It never changes the saved customer configuration or backup state.
