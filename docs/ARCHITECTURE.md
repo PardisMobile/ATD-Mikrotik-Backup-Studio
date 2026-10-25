@@ -2,7 +2,7 @@
 
 ## Goal
 
-Preserve the existing RouterOS 7 scheduled-backup-to-SFTP workflow and add server-side automatic Telegram delivery and a password-protected panel around it. After successful SFTP upload, new RouterOS scripts make one authenticated HTTPS request to the panel endpoint; the router never calls Telegram directly. PHP checks file-size stability and sends the file server-side. The first-run values collected by the Windows generator are persistent configuration, not part of updateable UI/application code.
+Preserve the existing RouterOS 7 scheduled-backup-to-SFTP workflow without adding any RouterOS callback. A dedicated ATD cron job scans the configured Linux backup directory once per minute, ignores files present at installation, checks file-size stability, and sends new files server-side. The Windows generator collects Telegram bot token and chat ID, which are saved in private configuration. The panel remains available for file management and manual send/retry.
 
 ## Components
 
@@ -10,7 +10,7 @@ Preserve the existing RouterOS 7 scheduled-backup-to-SFTP workflow and add serve
 2. **Generated output** — `paste-into-routeros-terminal.txt` and RouterOS source; when Telegram/panel mode is selected, a private `install.sh` containing the initial config payload and expected SHA-256 hashes for the matching application assets. The generated installer is sensitive and must not be shared publicly.
 3. **Canonical server assets** — `server-deployment/send-backup.php`, `panel.css`, and `panel.js`. They contain application code only, not customer-specific secrets. The Windows generator embeds matching templates and computes hashes; the generated bootstrap downloads the GitHub copies and aborts if any hash differs.
 4. **Private server config and state** — `/etc/atd-mikrotik-backup-studio/config.php` stores first-run constants with restrictive permissions; `/var/lib/atd-mikrotik-backup-studio/state.php` stores delivery history and panel-password changes. Neither is overwritten by routine code updates.
-5. **Server runtime** — application under `/opt/atd-mikrotik-backup-studio`, private config/TLS material under `/etc/atd-mikrotik-backup-studio`, state under `/var/lib/atd-mikrotik-backup-studio`, and dedicated services `atd-mikrotik-backup-php.service` and `atd-mikrotik-backup-tls.service`. The PHP endpoint is invoked by the post-SFTP RouterOS callback; no Telegram worker, scanner, or timer is installed. The runtime uses an ATD-specific public port and does not edit existing Nginx/Apache configuration.
+5. **Server runtime** — application under `/opt/atd-mikrotik-backup-studio`, private config/TLS material under `/etc/atd-mikrotik-backup-studio`, state under `/var/lib/atd-mikrotik-backup-studio`, and dedicated services `atd-mikrotik-backup-php.service` and `atd-mikrotik-backup-tls.service`. The PHP application is invoked in CLI scan mode by the dedicated `/etc/cron.d/atd-mikrotik-backup-telegram` job. No RouterOS callback is used. The runtime uses an ATD-specific public port and does not edit existing Nginx/Apache configuration.
 6. **Updater** — `sudo atd-mikrotik-backup-update` downloads and stages application code, validates PHP syntax, backs up previous code, replaces only versioned assets, and restarts only the ATD PHP service. It does not replace private config, state, uploaded backups, TLS keys, or assigned ports.
 
 ## Secret handling
@@ -32,7 +32,7 @@ Preserve the existing RouterOS 7 scheduled-backup-to-SFTP workflow and add serve
 - The generator's embedded PHP/CSS/JS templates must match the canonical files in `server-deployment/`; CI checks this invariant.
 - Generated bootstraps verify SHA-256 hashes for the panel assets and abort if the package and GitHub assets do not match.
 - The RouterOS SFTP command remains the delivery boundary. Telegram failures must never affect local cleanup, which depends only on the user's Keep/Delete choice and successful SFTP upload.
-- Keep the endpoint compatible with legacy `RELAY_TOKEN` configurations while new scripts use `TRIGGER_TOKEN`; all Telegram API calls remain in PHP.
+- Keep all Telegram API calls server-side. The RouterOS script must remain unchanged and must never call the panel or Telegram.
 - Do not change the tested SFTP code merely to reorganize files. Regression-test SFTP-only mode after changes.
 - A feature is not complete until a generated installer has been exercised on a clean Linux test server and RouterOS/SFTP/Telegram flows are verified.
 
