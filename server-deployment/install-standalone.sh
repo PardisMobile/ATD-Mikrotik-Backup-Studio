@@ -93,7 +93,7 @@ if [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+$' "$TLS/ports.env"
   # shellcheck disable=SC1090
   source "$TLS/ports.env"
 else
-  PUBLIC_PORT=$(sed -n 's/^const PUBLIC_PORT = \\([0-9]\\+\\);$/\\1/p' "$SRC/config.php" | head -n1)
+  PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;' "$SRC/config.php")
   [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 ]] || { echo 'Missing/invalid PUBLIC_PORT in generated configuration.' >&2; exit 7; }
   python3 - "$PUBLIC_PORT" <<'PYPORT'
 import socket,sys
@@ -109,7 +109,7 @@ finally:
 PYPORT
   BACKEND_PORT=$(freeport 2000 19999)
   [[ -n "$BACKEND_PORT" ]] || { echo 'No free backend port found.' >&2; exit 7; }
-  printf 'PUBLIC_PORT=%s\\nBACKEND_PORT=%s\\n' "$PUBLIC_PORT" "$BACKEND_PORT" > "$TLS/ports.env"
+  printf 'PUBLIC_PORT=%s\nBACKEND_PORT=%s\n' "$PUBLIC_PORT" "$BACKEND_PORT" > "$TLS/ports.env"
   chmod 0600 "$TLS/ports.env"
 fi
 [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 && "$BACKEND_PORT" =~ ^[0-9]+$ && "$BACKEND_PORT" -ge 2000 && "$BACKEND_PORT" -le 19999 ]] || { echo 'Invalid stored port configuration.' >&2; exit 7; }
