@@ -2,9 +2,9 @@
 
 ## First-run configuration
 
-The Windows generator collects the SFTP destination and, when enabled, Telegram bot token, chat ID, legacy relay compatibility token, initial panel password hash/salt, backup directory, and maximum accepted file size. The generated `install.sh` carries this customer-specific configuration in a base64 payload; base64 is encoding, not encryption, so keep the generated installer private and transfer it securely.
+The Windows generator collects the SFTP destination, initial panel password hash/salt, backup directory, selected backup schedule, public panel port, and maximum accepted file size. Telegram bot token and chat ID are configured later from the authenticated web panel. The generated `install.sh` carries this customer-specific configuration in a base64 payload; base64 is encoding, not encryption, so keep the generated installer private and transfer it securely.
 
-At installation, the bootstrap downloads `send-backup.php`, `panel.css`, and `panel.js` from the public GitHub repository and verifies their SHA-256 hashes against the values embedded by the generator. A mismatch aborts installation rather than mixing incompatible versions. The installer writes configuration to `/etc/atd-mikrotik-backup-studio/config.php` with restrictive permissions. The PHP application code contains no customer secrets.
+At installation, the bootstrap resolves the current `main` commit once and downloads all server assets—including `send-backup.php`, `panel.css`, `panel.js`, `cron-helper.sh`, and `install-standalone.sh`—using that immutable commit SHA. This prevents separate requests from mixing files from different commits. The generated package embeds only customer-specific private configuration; it does not embed the panel implementation. The installer writes configuration to `/etc/atd-mikrotik-backup-studio/config.php` with restrictive permissions. The PHP application code contains no customer secrets.
 
 ## Update command
 
@@ -15,7 +15,7 @@ sudo atd-mikrotik-backup-update
 ```
 
 The updater:
-- Downloads the versioned application files into a temporary staging directory over HTTPS.
+- Resolves one immutable Git commit, then downloads the application files into a temporary staging directory over HTTPS from that exact commit.
 - Checks PHP syntax and confirms the PHP application loads the separate private config before touching live code.
 - Creates a timestamped backup of the current application files.
 - Replaces only `send-backup.php`, `panel.css`, and `panel.js`.
@@ -27,5 +27,5 @@ It does not replace `/etc/atd-mikrotik-backup-studio/config.php`, the delivery s
 ## Security notes
 
 - The bootstrap's embedded config is not encrypted. Do not upload generated packages to public issue trackers, repositories, or shared folders.
-- Updates fetch the current `main` branch over HTTPS and syntax-check the staged PHP. For high-assurance production rollout, pinning signed releases and checksums for updater downloads is still recommended.
+- Updates resolve the current `main` commit and fetch all staged files by that immutable commit SHA. This ensures snapshot consistency, but does not authenticate the commit with a signed release or independently pinned checksums; signed releases and a trusted manifest remain future hardening.
 - Updates must be tested on a disposable Linux VM before production use. Do not claim real-server safety from CI checks alone.
