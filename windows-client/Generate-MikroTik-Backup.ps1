@@ -545,22 +545,23 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
     $installServer = @'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# ATD standalone installer wrapper; runs the dedicated service installer without touching existing web-server configuration.
-[[ $(id -u) -eq 0 ]] || { echo 'Run with sudo: sudo bash install-server.sh' >&2; exit 2; }
+# One simple installer. The runtime uses isolated ports and does not edit existing web-server configs.
+[[ $(id -u) -eq 0 ]] || { echo 'Run as root: sudo bash install.sh' >&2; exit 2; }
 SRC="$(cd "$(dirname "$0")" && pwd)"
 for f in send-backup.php panel.css panel.js; do [[ -f "$SRC/$f" ]] || { echo "Missing $f; extract the complete generated package." >&2; exit 3; }; done
 if ! command -v curl >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y curl ca-certificates
   elif command -v dnf >/dev/null 2>&1; then dnf install -y curl ca-certificates
   elif command -v yum >/dev/null 2>&1; then yum install -y curl ca-certificates
-  else echo 'Cannot bootstrap curl: apt, dnf, or yum is required.' >&2; exit 4; fi
+  else echo 'Cannot install curl: apt, dnf, or yum is required.' >&2; exit 4; fi
 fi
 TMP="$(mktemp)"; trap 'rm -f -- "$TMP"' EXIT
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/install-standalone.sh' -o "$TMP"
-[[ -s "$TMP" ]] || { echo 'Could not download the ATD standalone installer.' >&2; exit 4; }
+[[ -s "$TMP" ]] || { echo 'Could not download the ATD installer.' >&2; exit 4; }
 bash "$TMP" "$SRC"
 '@
-    [System.IO.File]::WriteAllText((Join-Path $outDir 'install-server.sh'), $installServer, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText((Join-Path $outDir 'install.sh'), $installServer, [System.Text.UTF8Encoding]::new($false))
+
     [System.IO.File]::WriteAllText((Join-Path $outDir 'panel.css'), $css, [System.Text.UTF8Encoding]::new($false))
     [System.IO.File]::WriteAllText((Join-Path $outDir 'panel.js'), $js, [System.Text.UTF8Encoding]::new($false))
 }
@@ -578,50 +579,23 @@ $terminalSetup = '/system script add name="' + $scriptName + '" policy=ftp,passw
 [System.IO.File]::WriteAllText((Join-Path $outDir 'paste-into-routeros-terminal.txt'), $terminalSetup, [System.Text.UTF8Encoding]::new($false))
 
 $readme = @"
-MIKROTIK BACKUP STUDIO - QUICK GUIDE
-Created by Amir Taheri | Orax Tech Solutions LLC | +989347682358
-
-WHAT IT DOES
-- Makes RouterOS 7 backups on the schedule you choose.
-- Uploads them to your SFTP server using the existing SFTP workflow.
-- If Telegram is enabled, waits briefly after SFTP and asks the PHP relay to verify that the remote file is stable before sending it.
-- Keeps a small delivery ledger so the same file version is not sent twice after a confirmed successful delivery.
+ATD MikroTik Backup Studio
+Panel: scheduled MikroTik RouterOS 7 backups over SFTP, with optional Telegram delivery and a password-protected web panel.
 
 FILES
-- paste-into-routeros-terminal.txt: copy the entire file into MikroTik Terminal to create the script and scheduler.
-- router-backup.rsc: RouterOS script source.
-- create-sftp-directory.txt: one Linux command to create the selected remote directory. Run it as root on the SFTP server if the directory does not exist.
-- send-backup.php: generated PHP Telegram relay with stability checking, duplicate protection, and password-protected responsive panel.
-- panel.css: separate responsive ATD light/dark UI stylesheet and CSS animations.
-- panel.js: theme toggle, language toggle, and live filename filtering.
+- paste-into-routeros-terminal.txt: paste the complete file into MikroTik Terminal.
+- send-backup.php: panel and Telegram relay.
+- panel.css: panel styles.
+- panel.js: panel interface behavior.
+- install.sh: automatic Linux server installer.
 
-SFTP
-- The default remote directory is /root/uploads. If you enter a relative directory name such as amir, it resolves to /root/amir. An absolute path such as /data/backups is used as entered.
-- Backup files remain in the configured private SFTP directory; the PHP relay reads that configured path. The panel itself is installed separately under the existing website document root, in a URL folder derived from the selected SFTP directory basename (default /root/uploads => /uploads/send-backup.php). Keep the private backup directory outside the public document root.
-- The panel URL is intended to be https://domain-or-server-IP/<selected-folder>/send-backup.php. No port is needed when the existing site is served on the standard HTTPS port. The installer must not rewrite existing vhosts or certificates.
-- MikroTik does not create Linux directories. In SFTP-only mode, run the command in create-sftp-directory.txt once on the server.
-- SFTP success and remote-file completion are different checks. Telegram mode waits 10 seconds after SFTP and then PHP checks size and modification-time stability before sending.
+INSTALL
+1. Copy the generated package to your Linux server.
+2. Run: sudo bash install.sh
+3. Open the HTTPS URL printed by the installer and sign in with the panel password you configured.
+4. If your package uses Telegram, test delivery with a test backup first.
 
-TELEGRAM SETUP
-1. In Telegram, open @BotFather and use /newbot. Keep the bot token secret.
-2. Open your new bot and press Start. For a group/channel, add the bot and grant permission to send documents.
-3. Find the numeric destination chat ID. It can be your private chat, a group, or a channel where the bot is allowed to post.
-4. Run the generator and choose SFTP + Telegram. Enter the bot token, destination chat ID, and a strong panel password. The relay token is generated automatically.
-5. Upload the generated files to the server. From the uploaded package run: sudo bash install-server.sh /absolute/path/under/existing-webroot/atd-backup. The installer runs a dedicated PHP service on an automatically selected port, creates a self-signed TLS certificate for the server IP, and adds only the needed firewall allow rule when a supported firewall manager is detected. Existing web-server configurations and ports are not changed. The server must have internet access for package installation and to download the installer.
-6. After installation, the installer prints a URL such as https://203.0.113.10:49173/. The port is chosen automatically. A self-signed certificate encrypts traffic but browsers will show a trust warning; verify the server IP before continuing. No domain or subdomain is required. The installer does not change existing web-server configurations.
-7. Test the panel login, list of backup files, manual Telegram send/retry, password change and deletion only with a test backup first. Confirm the file arrives in Telegram before choosing local deletion.
-8. To check for compatible server-panel updates later, without rerunning this generator, run the generated install-server.sh in update mode:
-   sudo bash install-server.sh --update "/absolute/path/to/installed/panel"
-   The updater preserves a timestamped backup and skips PHP replacement when it detects the legacy generated PHP schema, protecting customer settings/state until a compatible PHP migration is published. CSS/JS updates can still be applied.
-
-IMPORTANT SECURITY NOTES
-- Backup files are unencrypted and may contain sensitive router configuration.
-- Protect the generated output and SFTP credentials.
-- Never make the backup directory itself publicly downloadable. The PHP endpoint must validate filenames and only read the configured directory. The panel includes manual send/retry, delete with confirmation, password change, responsive layout, Persian/English, light/dark themes, and accent-color selection. Review the deployment output before relying on it in production.
-- PHP running under a web server usually cannot read /root/uploads by default. Do not chmod 777 or run PHP as root. The installer grants ACL access only to the selected backup directory and the detected web worker user. Because the panel supports deleting backups, that user needs write permission on that directory; use a dedicated PHP-FPM pool user where possible. Never chmod 777 or run PHP as root.
-- Telegram delivery requires a bot token; a chat ID alone cannot send files.
-- File stability is checked by repeated size and modification-time checks, but no filesystem observation is a mathematical guarantee of upload completion. The RouterOS SFTP command must also finish successfully.
-- Test on your actual RouterOS and hosting environment before relying on scheduled backups. This package has not been tested against your live router/server.
+The installer checks the server, installs only missing requirements, and uses its own ports. It does not edit existing Nginx/Apache configuration or stop other services. A self-signed TLS certificate causes a browser warning.
 "@
 [System.IO.File]::WriteAllText((Join-Path $outDir 'README.txt'), $readme, [System.Text.UTF8Encoding]::new($false))
 
