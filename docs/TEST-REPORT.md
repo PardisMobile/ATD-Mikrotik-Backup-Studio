@@ -3,8 +3,8 @@
 Last reviewed: 2026-10-25.
 
 ## Repository-level implementation review
-- The Windows generator creates a customer-specific `install.sh` in Telegram/Panel mode. It embeds the first-run config payload and SHA-256 hashes for matching PHP/CSS/JS application assets.
-- The generated installer downloads panel assets from GitHub and verifies hashes before installation; separate panel asset transfers are not required.
+- The Windows generator creates a customer-specific `install.sh` in Telegram/Panel mode. It embeds only the first-run private config payload; panel assets are downloaded from GitHub at install time.
+- The generated installer resolves one immutable `main` commit SHA and downloads all server assets from that exact commit, avoiding mixed snapshots from separate mutable `main` requests. Independent SHA-256 manifest/signature verification is not yet implemented.
 - Newly generated RouterOS scripts use the original SFTP-only flow and never call the panel or Telegram. The generator persists the chosen backup times in the private config. The Cron helper schedules server-side scans after those times, with a configurable delay and a six-minute retry window. The single Telegram connection test sends the newest existing backup file using sendDocument; per-file send buttons and text-only test messages are not used. Installer/updater cleanup removes legacy worker/scanner units and timers.
 - The runtime installer reads the selected public port from the generated configuration, checks for conflicts on a clean install, preserves the installed port on re-runs, and aborts if a new package expects a different port.
 - PHP sessions use an ATD-owned writable directory, and panel session cookies are explicitly marked Secure because TLS terminates at the local socat proxy.
@@ -14,7 +14,7 @@ Last reviewed: 2026-10-25.
 
 ## Automated checks
 - GitHub Actions run Bash syntax checks, ShellCheck, PHP syntax checks, source/template consistency tests, bootstrap syntax checks, key URL/port/session invariants, and PowerShell parser validation.
-- The latest CI status must be checked against the final commit before release.
+- The latest CI status must be checked against the final commit before release. The source workflow now asserts immutable-commit snapshot behavior and updater staging order.
 - Static validation does not establish that a real server install or update succeeds end to end.
 
 ## Not yet verified on a real server
@@ -36,3 +36,12 @@ Do not describe the project as production-ready until the latest CI checks pass 
 - The GitHub connector returned no combined status checks and no PR-triggered workflow runs for the latest direct-to-main commit. This is **unknown/not verified**, not a passing CI result. Check the Actions page for the push-triggered workflow run before release.
 - Project handoff context was added to the README under “Project Context for Continued Development” so future sessions can recover the current branch policy, implementation architecture, and verification limits.
 - Branch comparison still reports `fix/telegram-schedule-and-connection-test` as 25 commits ahead and 9 behind current `main`, with the common base at `15022946ec458758eff516968ee1cfcce7f673e3`. Tree-level file comparison shows the main implementation already contains the reviewed Cron/Telegram/install/update/workflow behavior plus the newer password policy and generator guidance. Do not delete the extra branch until its unique commits are individually reconciled and cleanup is possible.
+
+
+## Follow-up review (2026-10-25)
+
+- Fixed the generated bootstrap to resolve one GitHub commit SHA before downloading assets and pass that same SHA to the runtime installer.
+- Fixed runtime installer updater download to use the same pinned commit when invoked from the generated bootstrap; manual invocation resolves a commit before downloading the updater.
+- Fixed updater asset downloads to use a single immutable commit and deferred legacy service cleanup until downloaded assets pass validation.
+- Updated CI invariants and GitHub update documentation to reflect this architecture.
+- Still required: inspect the push-triggered workflow result for the newest commit, execute the generated PowerShell on Windows, and run clean-install/reinstall/update/rollback tests on a disposable Linux VM. No real-server end-to-end test has been performed in this review.
