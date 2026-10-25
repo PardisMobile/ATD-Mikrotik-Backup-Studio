@@ -1,63 +1,211 @@
 <?php
 declare(strict_types=1);
-/*
- * ATD MikroTik Backup Studio — server panel/relay template.
- * Configure the constants below before deployment. Never commit real secrets.
- */
-const ATD_RELAY_TOKEN = 'REPLACE_WITH_RANDOM_RELAY_TOKEN';
-const ATD_TELEGRAM_BOT_TOKEN = 'REPLACE_WITH_BOT_TOKEN';
-const ATD_TELEGRAM_CHAT_ID = 'REPLACE_WITH_NUMERIC_CHAT_ID';
-const ATD_PANEL_PASSWORD_HASH = 'REPLACE_WITH_PASSWORD_HASH';
-const ATD_BACKUP_DIR = '/absolute/path/to/backup-directory';
-const ATD_STATE_FILE = '/var/lib/atd-mikrotik-backup-studio/state.json';
-const ATD_MAX_FILE_BYTES = 47185920;
-const ATD_STABILITY_CHECKS = 3;
-const ATD_STABILITY_INTERVAL = 2;
-const ATD_MAX_WAIT = 90;
+require_once '/etc/atd-mikrotik-backup-studio/config.php';
+const STABILITY_CHECKS = 3;
+const STABILITY_INTERVAL_SECONDS = 2;
+const MAX_WAIT_SECONDS = 90;
 
-ini_set('session.use_strict_mode','1');
-session_set_cookie_params(['httponly'=>true,'secure'=>(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS']!=='off'),'samesite'=>'Strict']);
-session_start();
-header('X-Content-Type-Options: nosniff');
-header('Referrer-Policy: same-origin');
-header('X-Frame-Options: DENY');
+session_name_guard();
 
-function e(string $s): string { return htmlspecialchars($s,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'); }
-function state_read(): array { if(!is_file(ATD_STATE_FILE))return []; $x=@file_get_contents(ATD_STATE_FILE);$d=is_string($x)?json_decode($x,true):null;return is_array($d)?$d:[]; }
-function state_write(array $s): bool { $dir=dirname(ATD_STATE_FILE);if(!is_dir($dir)||!is_writable($dir))return false;$tmp=ATD_STATE_FILE.'.tmp';$ok=@file_put_contents($tmp,json_encode($s,JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES),LOCK_EX);if($ok===false)return false;@chmod($tmp,0600);return @rename($tmp,ATD_STATE_FILE); }
-function csrf(): string { if(empty($_SESSION['csrf']))$_SESSION['csrf']=bin2hex(random_bytes(32));return (string)$_SESSION['csrf']; }
-function post_csrf(): bool { return isset($_POST['csrf'],$_SESSION['csrf'])&&is_string($_POST['csrf'])&&hash_equals((string)$_SESSION['csrf'],(string)$_POST['csrf']); }
-function backup_path(string $name): string|false { $base=realpath(ATD_BACKUP_DIR);if($base===false||basename($name)!==$name||!preg_match('/\A[A-Za-z0-9_. -]+\.backup\z/',$name))return false;$p=realpath($base.DIRECTORY_SEPARATOR.$name);return $p!==false&&dirname($p)===$base&&is_file($p)?$p:false; }
-function telegram_send(string $name,bool $force=false): array {
- $p=backup_path($name);if($p===false||!is_readable($p))return [false,'FILE_NOT_FOUND'];$end=time()+ATD_MAX_WAIT;$stable=0;$ls=-1;$lm=-1;
- do { clearstatcache(true,$p);$s=@filesize($p);$m=@filemtime($p);if($s!==false&&$m!==false&&$s>0&&$s===$ls&&$m===$lm)$stable++;else $stable=0;$ls=$s===false?-1:$s;$lm=$m===false?-1:$m;if($stable>=ATD_STABILITY_CHECKS)break;sleep(ATD_STABILITY_INTERVAL); } while(time()<$end);
- if($stable<ATD_STABILITY_CHECKS)return [false,'FILE_NOT_STABLE'];$size=(int)filesize($p);if($size<1||$size>ATD_MAX_FILE_BYTES)return [false,'FILE_SIZE_REJECTED'];$hash=hash_file('sha256',$p);$st=state_read();
- if(!$force&&($st[$name]['sha256']??'')===$hash&&($st[$name]['status']??'')==='sent')return [true,'ALREADY_SENT'];
- if(!function_exists('curl_init'))return [false,'PHP_CURL_MISSING'];
- $ch=curl_init('https://api.telegram.org/bot'.ATD_TELEGRAM_BOT_TOKEN.'/sendDocument');curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>['chat_id'=>ATD_TELEGRAM_CHAT_ID,'document'=>new CURLFile($p,'application/octet-stream',$name),'caption'=>'MikroTik backup: '.$name],CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>15,CURLOPT_TIMEOUT=>180,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);$body=curl_exec($ch);$err=curl_error($ch);$http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);$j=is_string($body)?json_decode($body,true):null;$ok=$err===''&&$http>=200&&$http<300&&is_array($j)&&($j['ok']??false)===true;
- $st[$name]=['status'=>$ok?'sent':'failed','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($p),'updated_at'=>gmdate('c'),'error'=>$ok?null:($err?:'Telegram HTTP '.$http)];if(!state_write($st))return [false,'STATE_WRITE_FAILED'];return [$ok,$ok?'TELEGRAM_OK':'TELEGRAM_SEND_FAILED'];
+function session_name_guard(): void {
+    ini_set('session.use_strict_mode', '1');
+    session_set_cookie_params(['httponly'=>true, 'secure'=>(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'), 'samesite'=>'Strict']);
+    session_start();
 }
-function icon(string $d): string { return '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.$d.'</svg>'; }
-function page(): void {
- $en=(($_COOKIE['atd_lang']??'fa')==='en');$t=$en?['title'=>'Backup management','sub'=>'MikroTik backups, in one place.','files'=>'Backup files','sent'=>'Sent','failed'=>'Failed','storage'=>'Storage','search'=>'Search backups','name'=>'File name','size'=>'Size','date'=>'Modified','status'=>'Telegram status','actions'=>'Actions','send'=>'Send / retry','delete'=>'Delete','logout'=>'Sign out','password'=>'Change password','old'=>'Current password','new'=>'New password (12+ characters)','save'=>'Update password','login'=>'Sign in','bad'=>'Invalid password','empty'=>'No backup files found','confirm'=>'Delete this backup permanently?']:['title'=>'مدیریت بکاپ‌ها','sub'=>'فایل‌های بکاپ میکروتیک، یک‌جا و مرتب.','files'=>'تعداد بکاپ‌ها','sent'=>'ارسال‌شده','failed'=>'ناموفق','storage'=>'مجموع حجم','search'=>'جست‌وجوی بکاپ‌ها','name'=>'نام فایل','size'=>'حجم','date'=>'آخرین تغییر','status'=>'وضعیت تلگرام','actions'=>'عملیات','send'=>'ارسال / تلاش مجدد','delete'=>'حذف','logout'=>'خروج','password'=>'تغییر رمز پنل','old'=>'رمز فعلی','new'=>'رمز جدید (حداقل ۱۲ نویسه)','save'=>'تغییر رمز','login'=>'ورود','bad'=>'رمز عبور نادرست است','empty'=>'فایل بکاپی پیدا نشد','confirm'=>'این فایل بکاپ برای همیشه حذف شود؟'];
- if(isset($_POST['login'])){if(password_verify((string)($_POST['password']??''),ATD_PANEL_PASSWORD_HASH)){session_regenerate_id(true);$_SESSION['admin']=true;header('Location: '.$_SERVER['PHP_SELF']);exit;}$_SESSION['login_error']=true;header('Location: '.$_SERVER['PHP_SELF']);exit;}
- if(empty($_SESSION['admin'])){ $bad=!empty($_SESSION['login_error']);unset($_SESSION['login_error']);echo '<!doctype html><html lang="'.($en?'en':'fa').'" dir="'.($en?'ltr':'rtl').'" data-theme><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ATD Backup Studio</title><link rel="stylesheet" href="panel.css"><body class="login-page"><main class="login-card"><div class="brand-mark">'.icon('<rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 12h.01M11 12h.01M15 12h.01"/>').'</div><p class="eyebrow">ATD · MIKROTIK BACKUP STUDIO</p><h1>'.e($t['title']).'</h1><p class="muted">'.e($t['sub']).'</p>'.($bad?'<div class="alert">'.e($t['bad']).'</div>':'').'<form method="post"><label>'.e($en?'Panel password':'رمز عبور پنل').'<input type="password" name="password" required autocomplete="current-password"></label><button class="btn btn-primary" name="login" value="1">'.e($t['login']).'</button></form><p class="muted"><button class="btn" data-language-toggle type="button">'.($en?'فارسی':'English').'</button> <button class="btn" data-theme-toggle type="button">◐</button></p></main><script src="panel.js" defer></script></body></html>';return;}
- if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['action'])){if(!post_csrf()){http_response_code(403);exit('CSRF validation failed');}$a=(string)$_POST['action'];$n=(string)($_POST['file']??'');$st=state_read();
- if($a==='send'){[$ok,$msg]=telegram_send($n,true);$_SESSION['flash']=[$ok,$msg];}
- elseif($a==='delete'){ $p=backup_path($n);if($p!==false&&is_writable($p)&&@unlink($p)){unset($st[$n]);state_write($st);$_SESSION['flash']=[true,'DELETED'];}else $_SESSION['flash']=[false,'DELETE_FAILED'];}
- elseif($a==='password'){if(!password_verify((string)($_POST['old_password']??''),ATD_PANEL_PASSWORD_HASH))$_SESSION['flash']=[false,'CURRENT_PASSWORD_INVALID'];elseif(strlen((string)($_POST['new_password']??''))<12)$_SESSION['flash']=[false,'PASSWORD_TOO_SHORT'];else $_SESSION['flash']=[false,'PASSWORD_CHANGE_REQUIRES_REDEPLOY'];}
- elseif($a==='logout'){$_SESSION=[];session_destroy();header('Location: '.$_SERVER['PHP_SELF']);exit;}
- header('Location: '.$_SERVER['PHP_SELF']);exit;}
- $files=glob(rtrim(ATD_BACKUP_DIR,'/').'/*.backup')?:[];usort($files,fn($a,$b)=>filemtime($b)<=>filemtime($a));$st=state_read();$bytes=0;$sent=0;$failed=0;foreach($files as $f){$bytes+=(int)filesize($f);$s=$st[basename($f)]['status']??'';$sent+=$s==='sent'?1:0;$failed+=$s==='failed'?1:0;}$token=csrf();$flash=$_SESSION['flash']??null;unset($_SESSION['flash']);
- echo '<!doctype html><html lang="'.($en?'en':'fa').'" dir="'.($en?'ltr':'rtl').'" data-theme><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ATD · '.e($t['title']).'</title><link rel="stylesheet" href="panel.css"><body><div class="app-shell"><header class="topbar"><div class="brand"><span class="brand-mark">'.icon('<rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 12h.01M11 12h.01M15 12h.01"/>').'</span><span>ATD<small>MIKROTIK BACKUP STUDIO</small></span></div><div class="toolbar"><button class="btn" data-language-toggle type="button">'.($en?'فارسی':'English').'</button><button class="btn" data-theme-toggle type="button">◐</button><div class="accent-picker">'.implode('',array_map(fn($c)=>'<button type="button" class="accent-swatch" style="background:'.$c.'" data-accent="'.$c.'" aria-label="Accent color" aria-pressed="false"></button>',['#1769e0','#0d9488','#7c3aed','#db2777','#ea580c'])).'</div><form method="post"><input type="hidden" name="csrf" value="'.e($token).'"><input type="hidden" name="action" value="logout"><button class="btn" type="submit">'.e($t['logout']).'</button></form></div></header><main class="main"><section class="hero"><div><div class="eyebrow">ATD · BACKUP WORKSPACE</div><h1>'.e($t['title']).'</h1><p class="muted">'.e($t['sub']).'</p></div></section><section class="stats"><article class="stat"><span class="stat-icon">'.icon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>').'</span><label>'.e($t['files']).'</label><strong>'.count($files).'</strong></article><article class="stat"><span class="stat-icon">'.icon('<path d="m5 12 4 4L19 6"/>').'</span><label>'.e($t['sent']).'</label><strong>'.$sent.'</strong></article><article class="stat"><span class="stat-icon">'.icon('<path d="M12 9v4m0 4h.01"/><path d="M10.3 3.9 2.3 18a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0Z"/>').'</span><label>'.e($t['failed']).'</label><strong>'.$failed.'</strong></article><article class="stat"><span class="stat-icon">'.icon('<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/>').'</span><label>'.e($t['storage']).'</label><strong>'.e(number_format($bytes/1048576,1).' MB').'</strong></article></section>';
- if(is_array($flash))echo '<p class="alert">'.e((string)$flash[1]).'</p>';
- echo '<section class="panel"><div class="panel-head"><div><h2>'.e($t['files']).'</h2><p>'.e($t['sub']).'</p></div><div class="panel-tools"><label class="search">'.icon('<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>').'<input data-backup-search type="search" placeholder="'.e($t['search']).'"></label><button class="btn" onclick="location.reload()" type="button">↻</button></div></div><div class="table-wrap"><table><thead><tr>'.implode('',array_map(fn($x)=>'<th>'.e($x).'</th>',[$t['name'],$t['size'],$t['date'],$t['status'],$t['actions']])).'</tr></thead><tbody>';
- foreach($files as $f){$n=basename($f);$s=$st[$n]['status']??'pending';$label=$s==='sent'?($en?'Sent':'ارسال‌شده'):($s==='failed'?($en?'Failed':'ناموفق'):($en?'Pending':'در انتظار'));echo '<tr data-backup-row><td><div class="file-name"><span class="file-icon">'.icon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>').'</span><span><strong>'.e($n).'</strong><small>RouterOS backup</small></span></div></td><td>'.e(number_format((int)filesize($f)/1048576,2).' MB').'</td><td>'.e(date('Y-m-d H:i',filemtime($f))).'</td><td><span class="status status-'.e($s).'">'.e($label).'</span></td><td><div class="actions"><form method="post"><input type="hidden" name="csrf" value="'.e($token).'"><input type="hidden" name="file" value="'.e($n).'"><input type="hidden" name="action" value="send"><button class="icon-btn" title="'.e($t['send']).'">'.icon('<path d="m22 2-7 20-4-9-9-4Z"/>').'</button></form><form method="post" data-confirm="'.e($t['confirm']).'"><input type="hidden" name="csrf" value="'.e($token).'"><input type="hidden" name="file" value="'.e($n).'"><input type="hidden" name="action" value="delete"><button class="icon-btn btn-danger" title="'.e($t['delete']).'">'.icon('<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6"/>').'</button></form></div></td></tr>';}
- if(!$files)echo '<tr><td colspan="5" class="empty">'.e($t['empty']).'</td></tr>';
- echo '</tbody></table></div><div class="panel-foot"><span>© '.date('Y').' ATD · MikroTik Backup Studio</span><span>HTTPS · Private backup storage</span></div></section><section class="panel settings"><h2>'.e($t['password']).'</h2><p class="muted">'.e($en?'Password rotation must be done in the protected server config and redeployed.':'برای تغییر رمز، هش رمز در فایل تنظیمات محافظت‌شدهٔ سرور باید به‌روزرسانی و پنل دوباره نصب شود.').'</p></section><footer class="footer"><span>ATD · MikroTik Backup Studio</span><span>RouterOS 7 · SFTP · Telegram</span></footer></main></div><script src="panel.js" defer></script></body></html>';
+function load_state(): array {
+    if (!is_file(STATE_FILE)) return [];
+    $raw = @file_get_contents(STATE_FILE);
+    if (!is_string($raw)) return [];
+    $prefix = "<?php http_response_code(404); exit; ?>\n";
+    if (strncmp($raw, $prefix, strlen($prefix)) === 0) $raw = substr($raw, strlen($prefix));
+    $data = json_decode($raw, true);
+    return is_array($data) ? $data : [];
 }
-if($_SERVER['REQUEST_METHOD']==='GET'){page();exit;}
-if($_SERVER['REQUEST_METHOD']!=='POST'){http_response_code(405);exit('METHOD_NOT_ALLOWED');}
-$provided=$_SERVER['HTTP_X_BACKUP_TOKEN']??'';if(!is_string($provided)||!hash_equals(ATD_RELAY_TOKEN,$provided)){http_response_code(403);exit('FORBIDDEN');}
-$input=json_decode(file_get_contents('php://input'),true);$name=is_array($input)?($input['file']??''):'';if(!is_string($name)||!preg_match('/\A[A-Za-z0-9_.-]+-\d{4}[A-Za-z]{3}\d{2}-\d{6}\.backup\z/',$name)){http_response_code(400);exit('INVALID_FILENAME');}
-[$ok,$message]=telegram_send($name);if(!$ok){http_response_code(409);exit($message);}header('Content-Type: text/plain; charset=utf-8');echo $message;
+function save_state(array $state): bool {
+    $tmp = STATE_FILE . '.tmp';
+    $payload = "<?php http_response_code(404); exit; ?>\n" . json_encode($state, JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);
+    if (@file_put_contents($tmp, $payload, LOCK_EX) === false) return false;
+    @chmod($tmp, 0600);
+    return @rename($tmp, STATE_FILE);
+}
+function verify_panel_password(string $password): bool {
+    $state = load_state();
+    $salt = (string)($state['_panel_password']['salt'] ?? PANEL_PASSWORD_SALT);
+    $expected = (string)($state['_panel_password']['hash'] ?? PANEL_PASSWORD_HASH);
+    $actual = hash_pbkdf2('sha1', $password, hex2bin($salt), 200000, 64);
+    return hash_equals($expected, $actual);
+}
+function csrf_token(): string {
+    if (empty($_SESSION['csrf'])) $_SESSION['csrf'] = bin2hex(random_bytes(32));
+    return (string)$_SESSION['csrf'];
+}
+function check_csrf(): bool {
+    return isset($_POST['csrf'], $_SESSION['csrf']) && is_string($_POST['csrf']) && hash_equals((string)$_SESSION['csrf'], (string)$_POST['csrf']);
+}
+function send_telegram_file(string $name, bool $force = false): array {
+    $base = realpath(BACKUP_DIR);
+    if ($base === false || !preg_match('/\A[A-Za-z0-9_. -]+\.backup\z/', $name) || basename($name) !== $name) return [false, 'INVALID_FILENAME'];
+    $path = realpath($base . DIRECTORY_SEPARATOR . $name);
+    if ($path === false || dirname($path) !== $base || !is_file($path) || !is_readable($path)) return [false, 'FILE_NOT_FOUND'];
+    $deadline=time()+MAX_WAIT_SECONDS; $stable=0; $lastSize=-1; $lastMtime=-1;
+    do {
+        clearstatcache(true,$path); $sz=@filesize($path); $mt=@filemtime($path);
+        if ($sz === false || $mt === false || $sz < 1) $stable=0;
+        elseif ($sz === $lastSize && $mt === $lastMtime) $stable++;
+        else $stable=0;
+        $lastSize=$sz===false?-1:$sz; $lastMtime=$mt===false?-1:$mt;
+        if ($stable >= STABILITY_CHECKS) break;
+        sleep(STABILITY_INTERVAL_SECONDS);
+    } while (time() < $deadline);
+    if ($stable < STABILITY_CHECKS) return [false,'FILE_NOT_STABLE'];
+    $size=@filesize($path); if ($size===false || $size<1 || $size>MAX_FILE_BYTES) return [false,'FILE_SIZE_REJECTED'];
+    $hash=hash_file('sha256',$path); $state=load_state();
+    if (!$force && isset($state[$name]) && ($state[$name]['sha256']??'')===$hash && ($state[$name]['status']??'')==='sent') return [true,'ALREADY_SENT'];
+    $ch=curl_init('https://api.telegram.org/bot'.TELEGRAM_BOT_TOKEN.'/sendDocument');
+    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>['chat_id'=>TELEGRAM_CHAT_ID,'document'=>new CURLFile($path,'application/octet-stream',$name),'caption'=>'MikroTik backup: '.$name],CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>15,CURLOPT_TIMEOUT=>180,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
+    $response=curl_exec($ch); $curlError=curl_error($ch); $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch); $result=is_string($response)?json_decode($response,true):null;
+    if ($curlError==='' && $http>=200 && $http<300 && is_array($result) && ($result['ok']??false)===true) {
+        $state[$name]=['status'=>'sent','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'sent_at'=>gmdate('c')];
+        if (!save_state($state)) return [false,'STATE_SAVE_FAILED'];
+        return [true,'TELEGRAM_OK'];
+    }
+    $state[$name]=['status'=>'failed','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'failed_at'=>gmdate('c'),'error'=>$curlError!==''?$curlError:('Telegram HTTP '.$http)]; save_state($state);
+    return [false,'TELEGRAM_SEND_FAILED'];
+}
+function esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES|ENT_SUBSTITUTE, 'UTF-8'); }
+function render_panel(): void {
+    header('Content-Type: text/html; charset=utf-8');
+    if (isset($_POST['logout'])) { $_SESSION=[]; session_destroy(); header('Location: '.$_SERVER['PHP_SELF']); return; }
+    if (!empty($_POST['login'])) {
+        if (verify_panel_password((string)($_POST['password'] ?? ''))) { session_regenerate_id(true); $_SESSION['admin']=true; header('Location: '.$_SERVER['PHP_SELF']); return; }
+        $error='رمز عبور نادرست است.';
+    }
+    if (empty($_SESSION['admin'])) {
+        echo '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ATD MikroTik Backup Studio</title><link rel="stylesheet" href="panel.css"></head><body class="login-page"><main class="login-card"><div class="brand-mark">'.icon_svg('router').'</div><p class="eyebrow">ATD · MIKROTIK BACKUP STUDIO</p><h1>مدیریت بکاپ‌ها</h1><p class="muted">برای ورود، رمز عبور پنل را وارد کنید.</p>'.(isset($error)?'<div class="alert alert-error">'.esc($error).'</div>':'').'<form method="post" class="login-form"><label for="password">رمز عبور</label><input id="password" type="password" name="password" required autocomplete="current-password" placeholder="رمز عبور پنل"><button class="btn btn-primary" name="login" value="1">ورود به پنل <span class="btn-icon">'.icon_svg('arrow-left').'</span></button></form><p class="login-foot">محافظت‌شده توسط ATD Security</p></main><script src="panel.js" defer></script></body></html>'; return;
+    }
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST['login']) && empty($_POST['logout'])) {
+        if (!check_csrf()) { http_response_code(403); exit('Invalid session token. Refresh the page and retry.'); }
+        $action=(string)($_POST['action']??''); $name=(string)($_POST['file']??'');
+        if ($action==='send') { [$ok,$message]=send_telegram_file($name, true); $_SESSION['flash']=['ok'=>$ok,'message'=>$message]; }
+        elseif ($action==='delete') {
+            $base=realpath(BACKUP_DIR); $path=($base!==false && basename($name)===$name && preg_match('/\A[A-Za-z0-9_. -]+\.backup\z/',$name))?realpath($base.DIRECTORY_SEPARATOR.$name):false;
+            if ($path!==false && dirname($path)===$base && is_file($path) && @unlink($path)) { $st=load_state(); unset($st[$name]); save_state($st); $_SESSION['flash']=['ok'=>true,'message'=>'DELETED']; }
+            else $_SESSION['flash']=['ok'=>false,'message'=>'DELETE_FAILED'];
+        } elseif ($action==='password') {
+            $old=(string)($_POST['old_password']??''); $new=(string)($_POST['new_password']??'');
+            if (!verify_panel_password($old)) $_SESSION['flash']=['ok'=>false,'message'=>'CURRENT_PASSWORD_INVALID'];
+            elseif (strlen($new)<12) $_SESSION['flash']=['ok'=>false,'message'=>'PASSWORD_TOO_SHORT'];
+            else { $st=load_state(); $salt=bin2hex(random_bytes(16)); $st['_panel_password']=['salt'=>$salt,'hash'=>hash_pbkdf2('sha1',$new,hex2bin($salt),200000,64),'changed_at'=>gmdate('c')]; if(save_state($st)) $_SESSION['flash']=['ok'=>true,'message'=>'PASSWORD_UPDATED']; else $_SESSION['flash']=['ok'=>false,'message'=>'STATE_SAVE_FAILED']; }
+        }
+        header('Location: '.$_SERVER['PHP_SELF']); exit;
+    }
+    $csrf=csrf_token();
+    $flash=$_SESSION['flash']??null; unset($_SESSION['flash']);
+    $base=realpath(BACKUP_DIR); $files=[];
+    if ($base !== false && is_readable($base)) { foreach (glob($base.DIRECTORY_SEPARATOR.'*.backup') ?: [] as $f) { if (is_file($f) && is_readable($f)) $files[]=$f; } }
+    usort($files, fn($a,$b)=>filemtime($b)<=>filemtime($a)); $state=load_state();
+    $totalBytes=0; foreach($files as $f) { $totalBytes += (int)filesize($f); }
+    $sentCount=0; $failedCount=0; foreach($files as $f) { $st=$state[basename($f)]['status']??''; if($st==='sent')$sentCount++; elseif($st==='failed')$failedCount++; }
+    $lang = (($_COOKIE['atd_lang'] ?? 'fa') === 'en') ? 'en' : 'fa'; $isEn = $lang==='en';
+    $t = $isEn ? ['title'=>'Backup management','subtitle'=>'Your MikroTik backup files, in one place.','files'=>'Backup files','sent'=>'Sent to Telegram','failed'=>'Failed delivery','storage'=>'Total storage','search'=>'Search backups…','name'=>'File name','size'=>'Size','date'=>'Modified','status'=>'Telegram status','actions'=>'Actions','sent_status'=>'Sent','failed_status'=>'Failed','pending'=>'Not sent','empty'=>'No .backup files found in this directory.','path'=>'Backup directory','logout'=>'Sign out','refresh'=>'Refresh','delete'=>'Delete','send'=>'Send / retry','confirm'=>'Are you sure you want to delete this backup?','language'=>'فارسی','theme'=>'Toggle theme','settings'=>'Panel','password'=>'Change password','old'=>'Current password','new'=>'New password (12+ characters)','save'=>'Update password','cancel'=>'Cancel','login'=>'Sign in','welcome'=>'Welcome back','secure'=>'Secure backup workspace','bytes'=>'bytes'] : ['title'=>'مدیریت بکاپ‌ها','subtitle'=>'فایل‌های بکاپ میکروتیک، یک‌جا و مرتب.','files'=>'تعداد بکاپ‌ها','sent'=>'ارسال‌شده به تلگرام','failed'=>'ارسال ناموفق','storage'=>'حجم کل فایل‌ها','search'=>'جست‌وجوی بکاپ…','name'=>'نام فایل','size'=>'حجم','date'=>'آخرین تغییر','status'=>'وضعیت تلگرام','actions'=>'عملیات','sent_status'=>'ارسال‌شده','failed_status'=>'ناموفق','pending'=>'ارسال‌نشده','empty'=>'فایلی با پسوند .backup در این مسیر پیدا نشد.','path'=>'مسیر بکاپ','logout'=>'خروج','refresh'=>'تازه‌سازی','delete'=>'حذف','send'=>'ارسال / تلاش مجدد','confirm'=>'از حذف این فایل بکاپ مطمئن هستید؟','language'=>'English','theme'=>'تغییر تم','settings'=>'پنل','password'=>'تغییر رمز عبور','old'=>'رمز فعلی','new'=>'رمز جدید (حداقل ۱۲ کاراکتر)','save'=>'ذخیره رمز','cancel'=>'انصراف','login'=>'ورود','welcome'=>'خوش آمدید','secure'=>'محیط امن مدیریت بکاپ','bytes'=>'بایت'];
+    echo '<!doctype html><html lang="'.($isEn?'en':'fa').'" dir="'.($isEn?'ltr':'rtl').'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>ATD · '.esc($t['title']).'</title><link rel="stylesheet" href="panel.css"></head><body><div class="app-shell"><aside class="sidebar"><a class="brand" href="'.esc($_SERVER['PHP_SELF']).'"><span class="brand-mark">'.icon_svg('router').'</span><span><strong>ATD</strong><small>MIKROTIK BACKUP STUDIO</small></span></a><div class="side-label">'.esc($t['settings']).'</div><div class="side-active">'.icon_svg('layout').'<span>'.esc($t['title']).'</span></div><div class="sidebar-bottom"><span class="online-dot"></span><span>RouterOS 7 · '.($isEn?'Protected':'محافظت‌شده').'</span></div></aside><main class="main-content"><header class="topbar"><div class="topbar-heading"><div class="breadcrumb">ATD <span>/</span> '.esc($t['title']).'</div><h1>'.esc($t['title']).'</h1><p>'.esc($t['subtitle']).'</p></div><div class="top-actions"><button class="icon-btn" type="button" id="themeToggle" aria-label="'.esc($t['theme']).'">'.icon_svg('moon').'</button><div class="theme-colors" aria-label="Accent color"><button class="color-swatch" style="background:#1769e0" data-accent="#1769e0" aria-label="Blue"></button><button class="color-swatch" style="background:#0d9488" data-accent="#0d9488" aria-label="Teal"></button><button class="color-swatch" style="background:#7c3aed" data-accent="#7c3aed" aria-label="Violet"></button><button class="color-swatch" style="background:#db2777" data-accent="#db2777" aria-label="Rose"></button><button class="color-swatch" style="background:#ea580c" data-accent="#ea580c" aria-label="Orange"></button></div><button class="language-btn" type="button" id="languageToggle">'.esc($t['language']).'</button><form method="post"><button class="btn btn-ghost" name="logout" value="1">'.icon_svg('logout').'<span>'.esc($t['logout']).'</span></button></form></div></header>';
+    if (is_array($flash)) echo '<div class="alert '.(!empty($flash['ok'])?'alert-success':'alert-error').'">'.esc((string)($flash['message']??'')).'</div>';
+    echo '<section class="welcome-strip"><div class="welcome-copy"><span class="eyebrow">ATD BACKUP CENTER</span><h2>'.esc($t['welcome']).' 👋</h2><p>'.esc($t['secure']).'</p></div><div class="welcome-art" aria-hidden="true">'.icon_svg('cloud').'</div></section>';
+    echo '<section class="stats-grid"><article class="stat-card"><span class="stat-icon blue">'.icon_svg('files').'</span><span class="stat-label">'.esc($t['files']).'</span><strong>'.count($files).'</strong><small>'.esc($t['path']).': <code>'.esc(BACKUP_DIR).'</code></small></article><article class="stat-card"><span class="stat-icon green">'.icon_svg('send').'</span><span class="stat-label">'.esc($t['sent']).'</span><strong>'.$sentCount.'</strong><small>'.($isEn?'Successful deliveries':'ارسال‌های موفق ثبت‌شده').'</small></article><article class="stat-card"><span class="stat-icon orange">'.icon_svg('alert').'</span><span class="stat-label">'.esc($t['failed']).'</span><strong>'.$failedCount.'</strong><small>'.($isEn?'Files needing attention':'فایل‌های نیازمند بررسی').'</small></article><article class="stat-card"><span class="stat-icon purple">'.icon_svg('database').'</span><span class="stat-label">'.esc($t['storage']).'</span><strong>'.esc(format_bytes($totalBytes)).'</strong><small>'.($isEn?'Combined backup size':'مجموع حجم بکاپ‌ها').'</small></article></section>';
+    echo '<section class="files-panel password-panel"><div class="panel-heading"><div><h2>'.icon_svg('shield').' '.esc($t['password']).'</h2><p>'.($isEn?'Use a strong password with at least 12 characters.':'برای امنیت بیشتر، رمز قوی با حداقل ۱۲ نویسه انتخاب کنید.').'</p></div></div><form method="post" class="password-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="password"><label>'.esc($t['old']).'<input type="password" name="old_password" required autocomplete="current-password"></label><label>'.esc($t['new']).'<input type="password" name="new_password" minlength="12" required autocomplete="new-password"></label><button class="btn btn-primary" type="submit">'.esc($t['save']).'</button></form></section>';
+    echo '<section class="files-panel"><div class="panel-heading"><div><h2>'.icon_svg('files').' '.esc($isEn?'Your backups':'فایل‌های بکاپ شما').'</h2><p>'.($isEn?'Review recent backups and Telegram delivery status.':'وضعیت فایل‌ها و ارسال تلگرام را بررسی کنید.').'</p></div><div class="panel-tools"><label class="search-box">'.icon_svg('search').'<input id="backupSearch" type="search" placeholder="'.esc($t['search']).'" autocomplete="off"></label><button class="btn btn-primary" type="button" onclick="location.reload()">'.icon_svg('refresh').' <span>'.esc($t['refresh']).'</span></button></div></div><div class="table-wrap"><table id="backupTable"><thead><tr><th>'.esc($t['name']).'</th><th>'.esc($t['size']).'</th><th>'.esc($t['date']).'</th><th>'.esc($t['status']).'</th><th>'.esc($t['actions']).'</th></tr></thead><tbody>';
+    foreach ($files as $f) { $n=basename($f); $st=$state[$n]??[]; $status=(string)($st['status']??'pending'); $statusClass=$status==='sent'?'status-sent':($status==='failed'?'status-failed':'status-pending'); $statusText=$status==='sent'?$t['sent_status']:($status==='failed'?$t['failed_status']:$t['pending']); echo '<tr data-search="'.esc(strtolower($n)).'"><td><div class="file-name"><span class="file-icon">'.icon_svg('file').'</span><span><strong>'.esc($n).'</strong><small>'.esc($isEn?'MikroTik backup file':'فایل پشتیبان میکروتیک').'</small></span></div></td><td class="nowrap">'.esc(format_bytes((int)filesize($f))).'</td><td class="nowrap">'.esc(date('Y-m-d H:i',filemtime($f))).'</td><td><span class="status-pill '.$statusClass.'"><i></i>'.esc($statusText).'</span></td><td><div class="row-actions"><form method="post" class="inline-action"><input type="hidden" name="csrf" value="'.esc($csrf).'"/><input type="hidden" name="action" value="send"/><input type="hidden" name="file" value="'.esc($n).'"/><button class="icon-btn" type="submit" title="'.esc($t['send']).'" aria-label="'.esc($t['send']).'">'.icon_svg('send').'</button></form><form method="post" class="inline-action" onsubmit="return confirm(&quot;'.esc($t['confirm']).'&quot;)"><input type="hidden" name="csrf" value="'.esc($csrf).'"/><input type="hidden" name="action" value="delete"/><input type="hidden" name="file" value="'.esc($n).'"/><button class="icon-btn danger" type="submit" title="'.esc($t['delete']).'" aria-label="'.esc($t['delete']).'">'.icon_svg('trash').'</button></form></div></td></tr>'; }
+    if (!$files) echo '<tr><td colspan="5"><div class="empty-state">'.icon_svg('folder-empty').'<strong>'.esc($t['empty']).'</strong></div></td></tr>';
+    echo '</tbody></table></div><div class="panel-footer"><span>'.($isEn?'Showing':'نمایش'). ' <strong>'.count($files).'</strong> '.($isEn?'backup files':'فایل بکاپ').'</span><span class="footer-secure">'.icon_svg('shield').' '.($isEn?'Private server storage':'ذخیره‌سازی خصوصی روی سرور').'</span></div></section><footer class="app-footer"><span>© '.date('Y').' ATD · MikroTik Backup Studio</span><span>'.($isEn?'Built for safer backups':'ساخته‌شده برای بکاپ‌گیری امن‌تر').'</span></footer></main></div><script src="panel.js" defer></script></body></html>';
+}
+function icon_svg(string $name): string {
+    $paths = [
+        'router'=>'<rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 12h.01M11 12h.01M15 12h.01M7 17v3m10-3v3M9 5l3-2 3 2"/>',
+        'arrow-left'=>'<path d="M19 12H5m7 7-7-7 7-7"/>','moon'=>'<path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>',
+        'layout'=>'<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M9 9h12"/>','logout'=>'<path d="M10 17l5-5-5-5m5 5H3"/><path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"/>',
+        'cloud'=>'<path d="M20 16.2A4.5 4.5 0 0 0 18 7.5a6 6 0 0 0-11.5 1.7A4 4 0 0 0 7 17h12"/><path d="M12 12v8m-3-3 3 3 3-3"/>',
+        'files'=>'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
+        'send'=>'<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>','alert'=>'<path d="m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3.1l-8-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/>',
+        'database'=>'<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5M3 12a9 3 0 0 0 18 0"/>','search'=>'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>','refresh'=>'<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>',
+        'file'=>'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>','trash'=>'<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/>','shield'=>'<path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11Z"/><path d="m9 12 2 2 4-4"/>','folder-empty'=>'<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 10h18"/>'
+    ];
+    return '<svg class="svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'.($paths[$name]??$paths['file']).'</svg>';
+}
+function format_bytes(int $bytes): string {
+    if ($bytes < 1024) return $bytes.' B';
+    $units=['KB','MB','GB','TB']; $value=$bytes/1024; $i=0;
+    while($value>=1024 && $i<count($units)-1){$value/=1024;$i++;}
+    return number_format($value, $value<10?1:0).' '.$units[$i];
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET' || (!empty($_SESSION['admin']) && $_SERVER['REQUEST_METHOD'] === 'POST') || (!empty($_POST['login']) && $_SERVER['REQUEST_METHOD'] === 'POST')) {
+    render_panel();
+    exit;
+}
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit('METHOD_NOT_ALLOWED'); }
+$provided = $_SERVER['HTTP_X_BACKUP_TOKEN'] ?? '';
+if (!hash_equals(RELAY_TOKEN, $provided)) { http_response_code(403); exit('FORBIDDEN'); }
+$input = json_decode(file_get_contents('php://input'), true);
+$name = is_array($input) ? ($input['file'] ?? '') : '';
+if (!is_string($name) || !preg_match('/\A[A-Za-z0-9_.-]+-\d{4}[A-Za-z]{3}\d{2}-\d{6}\.backup\z/', $name)) {
+    http_response_code(400); exit('INVALID_FILENAME');
+}
+$base = realpath(BACKUP_DIR);
+$path = $base === false ? false : realpath($base . DIRECTORY_SEPARATOR . $name);
+if ($base === false || $path === false || dirname($path) !== $base || !is_file($path) || !is_readable($path)) {
+    http_response_code(404); exit('FILE_NOT_FOUND');
+}
+// Wait until the file size and modification time remain unchanged across consecutive checks.
+$deadline = time() + MAX_WAIT_SECONDS;
+$stable = 0; $lastSize = -1; $lastMtime = -1;
+do {
+    clearstatcache(true, $path);
+    $sizeNow = @filesize($path); $mtimeNow = @filemtime($path);
+    if ($sizeNow === false || $mtimeNow === false || $sizeNow < 1) { $stable = 0; }
+    elseif ($sizeNow === $lastSize && $mtimeNow === $lastMtime) { $stable++; }
+    else { $stable = 0; }
+    $lastSize = $sizeNow === false ? -1 : $sizeNow;
+    $lastMtime = $mtimeNow === false ? -1 : $mtimeNow;
+    if ($stable >= STABILITY_CHECKS) break;
+    sleep(STABILITY_INTERVAL_SECONDS);
+} while (time() < $deadline);
+if ($stable < STABILITY_CHECKS) { http_response_code(425); exit('FILE_NOT_STABLE'); }
+$size = filesize($path);
+if ($size === false || $size < 1 || $size > MAX_FILE_BYTES) { http_response_code(413); exit('FILE_SIZE_REJECTED'); }
+$hash = hash_file('sha256', $path);
+$state = load_state();
+if (isset($state[$name]) && ($state[$name]['sha256'] ?? '') === $hash && ($state[$name]['status'] ?? '') === 'sent') {
+    http_response_code(200); exit('TELEGRAM_OK'); // Idempotent success: never send the same version twice.
+}
+$ch = curl_init('https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendDocument');
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_POSTFIELDS => [
+        'chat_id' => TELEGRAM_CHAT_ID,
+        'document' => new CURLFile($path, 'application/octet-stream', $name),
+        'caption' => 'MikroTik backup: ' . $name
+    ],
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_CONNECTTIMEOUT => 15,
+    CURLOPT_TIMEOUT => 180,
+    CURLOPT_SSL_VERIFYPEER => true,
+    CURLOPT_SSL_VERIFYHOST => 2
+]);
+$response = curl_exec($ch);
+$curlError = curl_error($ch);
+$status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+$result = is_string($response) ? json_decode($response, true) : null;
+
+if ($curlError === '' && $status >= 200 && $status < 300 &&
+    is_array($result) && ($result['ok'] ?? false) === true) {
+    $state[$name] = ['status'=>'sent','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'sent_at'=>gmdate('c')];
+    if (!save_state($state)) { error_log('Telegram sent but state could not be saved; duplicate protection may be unavailable.'); }
+    http_response_code(200);
+    exit('TELEGRAM_OK');
+}
+$state[$name] = ['status'=>'failed','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'attempted_at'=>gmdate('c'),'http'=>$status];
+save_state($state);
+error_log('MikroTik backup Telegram delivery failed; HTTP=' . $status . '; error=' . $curlError);
+http_response_code(502);
+exit('TELEGRAM_FAILED');
