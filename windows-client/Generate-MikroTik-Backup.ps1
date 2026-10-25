@@ -53,13 +53,14 @@ Write-Host '                 Orax Tech Solutions LLC' -ForegroundColor Magenta
 Write-Host '                 Contact: +989347682358' -ForegroundColor Gray
 Write-Host '============================================================' -ForegroundColor DarkCyan
 Write-Host ''
-Write-Host '  Configure backup, delivery and scheduler in one pass.' -ForegroundColor Gray
-Write-Host '  Backup files are unencrypted; protect generated credentials.' -ForegroundColor Yellow
+Write-Host '  Create a MikroTik backup script and daily schedule.' -ForegroundColor Gray
+Write-Host '  Backups are unencrypted. Keep generated files and passwords private.' -ForegroundColor Yellow
 Write-Host ''
 
-Write-Host 'Choose destination mode:'
-Write-Host '  1) SFTP only'
-Write-Host '  2) SFTP + Telegram panel'
+Write-Host 'Choose how you want to use the backup tool:' -ForegroundColor Cyan
+Write-Host '  1) SFTP only - create backups and upload them to your Linux server.'
+Write-Host '  2) SFTP + Telegram panel - upload backups and manage automatic Telegram delivery.'
+Write-Host '  Note: Telegram Bot Token and Chat ID are entered later in the web panel.' -ForegroundColor Gray
 do { $mode = Read-Host 'Select 1 or 2' } while ($mode -notin @('1','2'))
 
 $useSftp = $true
@@ -67,8 +68,9 @@ $useTelegram = $mode -eq '2'
 if ($mode -eq '1') { $useTelegram = $false }
 
 Write-Host ''
-Write-Host 'SFTP destination (required for all modes). The SFTP host must be this same Linux server where the panel will be installed; the panel reads backups from its local filesystem.' -ForegroundColor Cyan
-Write-Host 'Use the real absolute Linux filesystem path, not a chroot-relative SFTP path. Create/check the folder first; the RouterOS script does not create Linux folders.' -ForegroundColor Yellow
+Write-Host 'SFTP settings (required in both modes)' -ForegroundColor Cyan
+Write-Host 'Use the same Linux server where the panel will be installed (mode 2). The panel reads backups from this server.' -ForegroundColor Gray
+Write-Host 'Enter the real Linux filesystem path, not a chroot-relative SFTP path. The backup folder must exist and be writable before the first backup.' -ForegroundColor Yellow
 $sftpHost = Read-Required 'SFTP hostname or IP'
 $sftpPort = '22'
 Write-Host 'SFTP port is fixed to 22.' -ForegroundColor DarkGray
@@ -97,7 +99,7 @@ if ($useTelegram) {
         if (-not $validPort) { Write-Host 'Enter a port from 20000 through 60000.' -ForegroundColor Yellow }
     } while (-not $validPort)
     while ($true) {
-        $panelPassword = Read-SecretText 'Choose initial panel password (at least 8 characters)'
+        $panelPassword = Read-SecretText 'Create panel password (minimum 8 characters)'
         if ($panelPassword.Length -lt 8) {
             Write-Host 'Password must contain at least 8 characters. Please try again.' -ForegroundColor Yellow
             continue
