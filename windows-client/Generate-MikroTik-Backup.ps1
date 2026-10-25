@@ -59,12 +59,11 @@ Write-Host ''
 
 Write-Host 'Choose destination mode:'
 Write-Host '  1) SFTP only'
-Write-Host '  2) Telegram delivery with automatic SFTP staging on the configured server'
-Write-Host '  3) SFTP + Telegram'
-do { $mode = Read-Host 'Select 1, 2, or 3' } while ($mode -notin @('1','2','3'))
+Write-Host '  2) SFTP + Telegram panel'
+do { $mode = Read-Host 'Select 1 or 2' } while ($mode -notin @('1','2'))
 
 $useSftp = $true
-$useTelegram = $mode -in @('2','3')
+$useTelegram = $mode -eq '2'
 if ($mode -eq '1') { $useTelegram = $false }
 
 Write-Host ''
@@ -87,12 +86,10 @@ $panelPath = '/' + $panelFolderName + '/send-backup.php'
 
 $maxUploadMb = '45'
 $panelPassword = ''
-$telegramBotToken = ''
-$telegramChatId = ''
 
 if ($useTelegram) {
     Write-Host ''
-    Write-Host 'Telegram delivery will be configured automatically from the values collected here.' -ForegroundColor Cyan
+    Write-Host 'Telegram bot token and Chat ID will be configured later in the web panel.' -ForegroundColor Cyan
     do {
         $publicPortInput = Read-Required 'Public HTTPS panel port (20000-60000; open this TCP port in your provider firewall if needed)' '24443'
         $publicPort = 0
@@ -101,10 +98,6 @@ if ($useTelegram) {
     } while (-not $validPort)
     $panelPassword = Read-SecretText 'Choose initial password for the web management panel'
     if ($panelPassword.Length -lt 12) { throw 'Use a panel password of at least 12 characters.' }
-    $telegramBotToken = Read-SecretText 'Telegram bot token from @BotFather'
-    if ($telegramBotToken -notmatch '^[0-9]{5,}:[A-Za-z0-9_-]{20,}$') { throw 'Telegram bot token format is invalid.' }
-    $telegramChatId = Read-Required 'Telegram destination Chat ID (numeric user or group ID)'
-    if ($telegramChatId -notmatch '^-?[0-9]{1,20}$') { throw 'Telegram Chat ID must be numeric.' }
 }
 
 Write-Host ''
@@ -492,8 +485,8 @@ exit('METHOD_NOT_ALLOWED');
     $configPhp = @"
 <?php
 declare(strict_types=1);
-const TELEGRAM_BOT_TOKEN = '$(Escape-PhpSingle $telegramBotToken)';
-const TELEGRAM_CHAT_ID = '$(Escape-PhpSingle $telegramChatId)';
+const TELEGRAM_BOT_TOKEN = '';
+const TELEGRAM_CHAT_ID = '';
 const PANEL_PASSWORD_SALT = '$passwordSalt';
 const PANEL_PASSWORD_HASH = '$panelPasswordHash';
 const BACKUP_DIR = '$pathPhp';
