@@ -212,11 +212,21 @@ chmod 0644 /etc/cron.d/atd-mikrotik-backup-apply
 /usr/local/sbin/atd-mikrotik-backup-cron --apply
 
 
-# Install the ATD-only updater. It never changes the saved customer configuration or backup state.
+# Install the updater from the same immutable source snapshot as the application assets.
+SOURCE_COMMIT="${ATD_SOURCE_COMMIT:-}"
+if [[ ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+  COMMIT_TMP=$(mktemp)
+  trap 'rm -f -- "$COMMIT_TMP"' EXIT
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+    'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$COMMIT_TMP"
+  SOURCE_COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$COMMIT_TMP" | sed -n '1p')"
+  rm -f -- "$COMMIT_TMP"
+fi
+[[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable updater source commit.' >&2; exit 9; }
 UPDATE_TMP=$(mktemp)
 trap 'rm -f -- "$UPDATE_TMP"' EXIT
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
-  'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/update-standalone.sh' -o "$UPDATE_TMP"
+  "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$SOURCE_COMMIT/server-deployment/update-standalone.sh" -o "$UPDATE_TMP"
 [[ -s "$UPDATE_TMP" ]] || { echo 'Could not download the ATD updater; initial install is active, but the updater was not installed.' >&2; exit 9; }
 bash -n "$UPDATE_TMP" || { echo 'Downloaded updater failed shell syntax validation.' >&2; exit 9; }
 install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backup-update
