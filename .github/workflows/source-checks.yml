@@ -58,7 +58,8 @@ jobs:
               return source[start:end].rstrip("\r\n")
           for name, path in (("php", "server-deployment/send-backup.php"),
                              ("css", "server-deployment/panel.css"),
-                             ("js", "server-deployment/panel.js")):
+                             ("js", "server-deployment/panel.js"),
+                             ("cronHelper", "server-deployment/cron-helper.sh")):
               embedded = here_string(name)
               canonical = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
               if embedded != canonical:
@@ -68,6 +69,7 @@ jobs:
               "__PHP_SHA256__": "0" * 64,
               "__CSS_SHA256__": "1" * 64,
               "__JS_SHA256__": "2" * 64,
+              "__CRON_HELPER_SHA256__": "3" * 64,
               "__CONFIG_B64__": "PD9waHA7",
           }.items():
               installer = installer.replace(key, value)
@@ -90,11 +92,23 @@ jobs:
               raise SystemExit("PHP must provide the automatic CLI scanner and Telegram sender")
           if "STABILITY_CHECKS = 2" not in php:
               raise SystemExit("PHP must check file-size stability before sending")
+          if "function latest_backup_name()" not in php or "send_telegram_file($latest, true)" not in php:
+              raise SystemExit("The single Telegram connection test must send the newest existing backup file")
+          if "sendMessage" in php or 'value="send"' in php:
+              raise SystemExit("Do not add a text-only test or per-file send buttons")
+          if "const BACKUP_SCHEDULE_TIMES = [$schedulePhp];" not in generated_config:
+              raise SystemExit("Generated private config must persist the Windows-selected backup times")
+          if "const TELEGRAM_DELAY_MINUTES = 2;" not in generated_config:
+              raise SystemExit("Generated private config must define the default Telegram delay")
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
           for script in (runtime, updater):
               if "/etc/cron.d/atd-mikrotik-backup-telegram" not in script or "--scan-backups" not in script:
                   raise SystemExit("Installer/updater must install the dedicated ATD cron scan")
+              if "/etc/cron.d/atd-mikrotik-backup-apply" not in script:
+                  raise SystemExit("Installer/updater must install the root-owned schedule-apply Cron worker")
+              if 'rm -f "$STATE/telegram-scan-started-at"' in script:
+                  raise SystemExit("Installer/updater must preserve the Telegram scan baseline")
           if "systemctl disable --now" not in runtime or "systemctl disable --now" not in updater:
               raise SystemExit("Installer and updater must remove obsolete ATD-only worker/timer units")
           config_start = source.index("$configPhp = @\"")
