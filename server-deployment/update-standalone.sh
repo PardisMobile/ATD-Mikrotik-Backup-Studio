@@ -56,13 +56,16 @@ rollback(){
   done
   if [[ -f "$BACKUP/cron-helper.sh" ]]; then cp -p "$BACKUP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
   else rm -f /usr/local/sbin/atd-mikrotik-backup-cron; fi
+  if [[ -f "$BACKUP/cron-apply" ]]; then cp -p "$BACKUP/cron-apply" /etc/cron.d/atd-mikrotik-backup-apply
+  else rm -f /etc/cron.d/atd-mikrotik-backup-apply; fi
   chown root:atdbackup "$APP/send-backup.php" "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
   chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true
 }
-# Preserve the existing helper so rollback can restore it.
+# Preserve existing helper and apply-worker Cron file so rollback can restore them.
 [[ ! -e /usr/local/sbin/atd-mikrotik-backup-cron ]] || cp -p /usr/local/sbin/atd-mikrotik-backup-cron "$BACKUP/cron-helper.sh"
+[[ ! -e /etc/cron.d/atd-mikrotik-backup-apply ]] || cp -p /etc/cron.d/atd-mikrotik-backup-apply "$BACKUP/cron-apply"
 install -o root -g root -m 0750 "$TMP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
 cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
 * * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
