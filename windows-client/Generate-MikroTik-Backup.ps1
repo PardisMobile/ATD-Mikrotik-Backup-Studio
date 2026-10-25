@@ -543,6 +543,7 @@ exit('METHOD_NOT_ALLOWED');
     # Keep customer-specific values separate from the versioned PHP application code.
     $phpTemplate = $php
     $phpHash = Get-Sha256Text $phpTemplate
+    $schedulePhp = ($scheduleTimes | ForEach-Object { "'" + $_ + "'" }) -join ', '
     $configPhp = @"
 <?php
 declare(strict_types=1);
@@ -557,7 +558,6 @@ const PUBLIC_PORT = $publicPort;
 const BACKUP_SCHEDULE_TIMES = [$schedulePhp];
 const TELEGRAM_DELAY_MINUTES = 2;
 "@
-    $schedulePhp = ($scheduleTimes | ForEach-Object { "'" + $_ + "'" }) -join ', '
     $configB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($configPhp))
 
     $cronHelper = @'
