@@ -2,6 +2,18 @@
 set -Eeuo pipefail
 # Installs into an existing website subdirectory. It never edits global vhost config or opens ports.
 # Usage: sudo bash install-server.sh /absolute/existing-webroot/atd-backup
+# Optional in-place update mode: fetch the updater from GitHub, then update an existing installation.
+if [[ "${1:-}" == "--update" ]]; then
+  TARGET="${2:-}"
+  [[ -n "$TARGET" && "$TARGET" == /* && -d "$TARGET" ]] || { echo "Usage: sudo bash install-server.sh --update /absolute/path/to/installed/panel" >&2; exit 2; }
+  TMP_UPDATER="$(mktemp)"
+  trap 'rm -f -- "$TMP_UPDATER"' EXIT
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \\
+    "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/update-server.sh" -o "$TMP_UPDATER"
+  [[ -s "$TMP_UPDATER" ]] || { echo "Could not download updater." >&2; exit 9; }
+  bash "$TMP_UPDATER" "$TARGET"
+  exit $?
+fi
 TARGET="${1:-}"
 [[ -n "$TARGET" && "$TARGET" == /* ]] || { echo "Usage: sudo bash install-server.sh /absolute/existing-webroot/atd-backup" >&2; exit 2; }
 PARENT="$(dirname "$TARGET")"
@@ -10,6 +22,7 @@ PARENT="$(dirname "$TARGET")"
 SRC="$(cd "$(dirname "$0")" && pwd)"
 for f in send-backup.php panel.css panel.js; do [[ -f "$SRC/$f" ]] || { echo "Missing $SRC/$f. Download the complete repository first." >&2; exit 5; }; done
 command -v php >/dev/null || { echo "PHP CLI is required." >&2; exit 6; }
+command -v curl >/dev/null || { echo "curl is required." >&2; exit 6; }
 php -r 'exit(extension_loaded("curl")?0:1);' || { echo "Enable PHP cURL first." >&2; exit 7; }
 # Do not overwrite without backup.
 mkdir -p -- "$TARGET"
