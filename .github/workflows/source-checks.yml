@@ -81,27 +81,31 @@ jobs:
           router_start = source.index("$routerScript = @\"")
           router_end = source.index("\n\"@", router_start)
           router_script = source[router_start:router_end]
-          if "/tool fetch" not in source or "X-Backup-Token" not in source or "/send-backup.php" not in source:
-              raise SystemExit("Generated RouterOS script must notify the authenticated panel after SFTP")
+          if 'url=("https://" . $sftpHost' in router_script or "X-Backup-Token" in router_script or "/send-backup.php" in router_script:
+              raise SystemExit("RouterOS script must retain the SFTP-only workflow and must not call the panel")
           if "api.telegram.org" in router_script or "telegramOK" in router_script:
               raise SystemExit("RouterOS must never call Telegram directly")
           php = Path("server-deployment/send-backup.php").read_text(encoding="utf-8")
-          if "--scan-backups" in php or "--worker" in php or "telegram-scan-started-at" in php:
-              raise SystemExit("PHP application must not contain a background worker/scanner mode")
-          if "function send_telegram_file(" not in php or "STABILITY_CHECKS = 2" not in php:
-              raise SystemExit("Panel PHP must check file-size stability before sending")
+          if "in_array('--scan-backups', $argv ?? [], true)" not in php or "function send_telegram_file(" not in php:
+              raise SystemExit("PHP must provide the automatic CLI scanner and Telegram sender")
+          if "STABILITY_CHECKS = 2" not in php:
+              raise SystemExit("PHP must check file-size stability before sending")
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
           for script in (runtime, updater):
-              if "cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer" in script or "OnUnitActiveSec=" in script:
-                  raise SystemExit("Installer/updater must not create a Telegram scan timer")
+              if "/etc/cron.d/atd-mikrotik-backup-telegram" not in script or "--scan-backups" not in script:
+                  raise SystemExit("Installer/updater must install the dedicated ATD cron scan")
           if "systemctl disable --now" not in runtime or "systemctl disable --now" not in updater:
-              raise SystemExit("Installer and updater must remove obsolete worker/timer units")
+              raise SystemExit("Installer and updater must remove obsolete ATD-only worker/timer units")
           config_start = source.index("$configPhp = @\"")
           config_end = source.index("\n\"@", config_start)
           generated_config = source[config_start:config_end]
-          if "RELAY_TOKEN" in generated_config:
-              raise SystemExit("New private configs must not depend on the legacy RouterOS relay token")
+          if "TRIGGER_TOKEN" in generated_config or "RELAY_TOKEN" in generated_config:
+              raise SystemExit("New private configs must not depend on RouterOS callback tokens")
+          if "const TELEGRAM_BOT_TOKEN = '$(Escape-PhpSingle $telegramBotToken)';" not in generated_config:
+              raise SystemExit("Generator must persist the Telegram bot token in private config")
+          if "const TELEGRAM_CHAT_ID = '$(Escape-PhpSingle $telegramChatId)';" not in generated_config:
+              raise SystemExit("Generator must persist the Telegram chat ID in private config")
           if "$cleanupCondition = '($backupOK = true) && ($sftpOK = true)'" not in source:
               raise SystemExit("Local cleanup must depend only on successful backup and SFTP")
           if "Keep local file? [Y/N]" not in source or "$deleteAfterUpload = $keepLocal -match" not in source:
