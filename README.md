@@ -7,6 +7,7 @@ ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, upload
 - Shows Telegram delivery status and supports manual send/retry.
 - Supports selecting old backup files for confirmed deletion.
 - Allows changing the panel password.
+- Lets you configure or replace the Telegram Bot Token and destination Chat ID inside the panel, with direct setup guides for `@BotFather` and `@userinfobot` and an optional test message.
 - Persian/English interface, light/dark theme, and responsive layout.
 - Keeps first-run settings and delivery state separate from updateable application code.
 
@@ -19,7 +20,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 2. Choose **3) SFTP + Telegram** to test the complete flow (SFTP upload, panel, and Telegram). Mode **1** tests SFTP only and does not install a panel.
 3. Enter the Linux server's hostname/IP and the existing SFTP username/password that already work for you. SFTP uses port **22**.
 4. Set the backup directory to a dedicated absolute Linux path. For example, use `/root/Uploads` if that is the real directory your existing SFTP workflow uses. Do not enter a chroot-relative path.
-5. Set the public HTTPS port (default `24443`), Telegram bot token and chat ID, and a panel password of at least 12 characters. Keep these secrets private.
+5. Set the public HTTPS port (default `24443`) and a panel password of at least 12 characters. Telegram credentials are configured after installation from the panel; the generator no longer asks for a Bot Token or Chat ID.
 6. Choose the backup schedule and whether to retain local router backups.
 
 ### 2. Install the panel on the same Linux server
@@ -28,6 +29,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 3. In panel mode, the installer creates the configured backup directory if it does not exist and grants the dedicated ATD panel service access to it. It does not require you to create a new SFTP account and does not change the existing SFTP credentials.
 4. Note the exact HTTPS URL printed by the installer. If remote access is needed, allow the selected TCP port in the server/provider firewall after checking existing firewall policy. The installer does not change firewall rules.
 5. Open that URL and sign in with the initial panel password. The default TLS certificate is self-signed, so a browser warning is expected.
+6. In **Telegram delivery settings**, follow the `@BotFather` guide for the token and `@userinfobot` guide for your numeric Chat ID. Start your own bot in Telegram, save the settings, then use **Send test message** to verify delivery.
 
 ### 3. Configure the MikroTik
 1. Open the generated `paste-into-routeros-terminal.txt` and paste its full contents into the RouterOS 7 terminal on the test router.
