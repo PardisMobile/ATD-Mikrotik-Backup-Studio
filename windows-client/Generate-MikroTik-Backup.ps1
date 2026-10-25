@@ -611,6 +611,7 @@ TELEGRAM/PANEL INSTALL
 4. The installer downloads the panel files, verifies SHA-256 checksums, writes private config on the server, and installs ATD services.
 5. Paste paste-into-routeros-terminal.txt into MikroTik Terminal.
 6. Open the exact HTTPS URL printed by the installer and sign in with the initial panel password. Allow the selected public TCP port in the provider firewall if needed.
+7. In the panel's Telegram delivery settings, enter the Bot Token and destination Chat ID, then use Send test message. The Windows generator does not ask for these Telegram credentials.
 
 SFTP-ONLY MODE
 No install.sh or web panel is created. Paste paste-into-routeros-terminal.txt into MikroTik Terminal and use create-sftp-directory.txt if the remote folder still needs to be created.
