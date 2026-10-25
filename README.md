@@ -1,82 +1,70 @@
 # ATD MikroTik Backup Studio
 
-**ATD · MikroTik RouterOS 7 backup automation, SFTP delivery, and optional Telegram management panel.**
+ATD MikroTik Backup Studio automates scheduled MikroTik RouterOS 7 backups, transfers backup files over SFTP, and optionally delivers them to Telegram through a password-protected management panel.
 
-> **Repository status: incomplete development snapshot.** The server panel assets and setup documentation are present. The full Windows client source/build files have not yet been synchronized into this repository, and the server template still requires secure configuration. Do not use this repository snapshot as a production-ready release.
+## Features
 
-## Planned product
+- Generates RouterOS 7 backup commands and scheduler configuration from a Windows setup tool.
+- Uploads backups to a configurable remote directory over SFTP.
+- Optional Telegram delivery using a bot token and destination chat ID.
+- Waits for uploaded files to appear stable before sending them to Telegram.
+- Tracks previously delivered files to reduce duplicate sends.
+- Web panel for listing backups, manually sending or retrying delivery, deleting files with confirmation, and changing the panel password.
+- Persian/English interface, light/dark themes, responsive layout, and selectable accent colors.
+- Standalone server deployment that does not require changing an existing Nginx/Apache configuration.
+- Automatically chooses an available public port and creates a self-signed TLS certificate, so a domain or subdomain is not required.
+- Adds an allow rule for the selected port when a supported host firewall manager is detected.
+- Keeps panel state in a separate protected directory and grants the service account limited access to the configured backup directory.
 
-- Generate RouterOS 7 backups from a Windows client.
-- Preserve the existing SFTP workflow.
-- Optionally send fully uploaded backup files to Telegram.
-- Check remote file stability before delivery and track successful sends by content hash.
-- Provide a responsive Persian/English web panel with light/dark themes and selectable accent colors.
-- Install under an existing HTTPS website without adding a listening port or changing global web-server configuration.
+## Requirements
 
-## Repository contents
+- Windows computer to generate the RouterOS configuration.
+- MikroTik RouterOS 7 with SFTP access to the backup server.
+- Linux server with internet access and a supported package manager (apt, dnf, or yum) for automatic installation.
+- Root/sudo access on the server.
+- Telegram bot token and destination chat ID only if Telegram delivery is enabled.
 
-- `server-deployment/send-backup.php` — configurable example relay and web panel.
-- `server-deployment/panel.css` — responsive ATD interface styling.
-- `server-deployment/panel.js` — theme, accent-color, language, search, and confirmation interactions.
-- `server-deployment/install-server.sh` — conservative copy helper for an existing web-root subdirectory.
-- `docs/INSTALLATION_FA.md` — Persian setup notes.
-- `docs/TEST-REPORT.md` — current test limitations and release gate.
-- `.gitignore` — excludes local secrets and generated backups.
+## How to use
 
-Partial Windows-client synchronization has started: the launcher C# source and BAT launch/build scripts are present. The core `Generate-MikroTik-Backup.ps1` and custom `.ico` are still missing, so the client cannot yet be built/run from this repository. The GitHub-downloaded panel installer flow is also not complete.
+### 1. Generate the backup configuration
 
-## Server setup (current scaffold only)
+1. Run the ATD MikroTik Backup Studio Windows generator.
+2. Enter the router, SFTP host, username, password, and remote backup directory.
+3. If Telegram is needed, enter the bot token and chat ID and set a strong panel password.
+4. Keep the generated package private; it contains customer-specific configuration and secrets.
 
-Clone the repository:
+### 2. Configure the MikroTik router
 
-```bash
-git clone https://github.com/PardisMobile/ATD-Mikrotik-Backup-Studio.git
-cd ATD-Mikrotik-Backup-Studio
-```
+1. Open the generated `paste-into-routeros-terminal.txt` file.
+2. Paste its complete contents into the MikroTik RouterOS terminal.
+3. Verify that the script and scheduler were created with the configured names.
+4. Confirm that the router can upload a backup to the selected SFTP directory.
 
-Review the installer and Persian guide before running any server-side command:
+### 3. Install the standalone panel
 
-```bash
-less server-deployment/install-server.sh
-less docs/INSTALLATION_FA.md
-```
+1. Upload the generated package, including `install-server.sh`, to the Linux server.
+2. From that directory, run:
 
-The PHP file contains explicit `REPLACE_...` placeholders. **Do not expose it publicly until every placeholder is replaced securely and authentication/state handling has been completed and tested.** The installer only copies files into a supplied existing directory; it does not detect your actual vhost/document root, generate secrets, or fully configure the relay.
+   ```bash
+   sudo bash install-server.sh
+   ```
 
-After the integrated installer is implemented, the intended command will resemble:
+3. The installer installs required packages, sets up the isolated ATD service, selects a port, creates a TLS certificate, and attempts to allow the port in a recognized host firewall.
+4. Open the URL printed at the end of installation. It uses the server IP and selected port; no domain or subdomain is required.
 
-```bash
-sudo bash server-deployment/install-server.sh /ABSOLUTE/EXISTING/WEBROOT/atd-backup
-```
+### 4. Browser certificate warning
 
-Replace the path with a verified subdirectory under the existing HTTPS site's document root. Never guess the path, run unreviewed scripts on production, use `chmod 777`, or run PHP as root. Be especially cautious with backup directories under `/root`.
+The standalone installer uses a self-signed certificate. The browser will warn that the certificate is not trusted by a public certificate authority. The connection is encrypted, but the certificate identity is not independently validated by the browser. Verify that the IP address in the URL is the address of your server before proceeding. A trusted certificate can be configured separately if you have a suitable domain or certificate.
 
-## Architecture contract
+### 5. Use the panel
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the required integration model: preserve the tested v3 SFTP client, generate per-customer scripts/configuration from EXE inputs, and fetch pinned non-secret panel assets from GitHub during server installation. This contract is not a claim that the full package is already synchronized or production-ready.
+Sign in with the panel password configured during generation. Review uploaded backups, manually send or retry Telegram delivery, and use the confirmation prompt before deleting files. Confirm Telegram receipt before relying on a backup as delivered.
 
-## Security
+## Security notes
 
-- Never commit Telegram bot tokens, relay tokens, panel passwords, private keys, or real backup files.
-- Keep secrets outside the repository and restrict server-side file permissions.
-- MikroTik backups can contain sensitive network configuration; limit access and retention.
-- Do not claim successful Telegram delivery until the received file is verified.
-
-## Testing and release
-
-Read [docs/TEST-REPORT.md](docs/TEST-REPORT.md) and [Persian installation notes](docs/INSTALLATION_FA.md). A stable release requires actual Windows/EXE build tests, RouterOS 7/SFTP tests, Telegram end-to-end tests, panel authentication/CSRF/password-rotation tests, installer/ACL tests on the target host, and responsive UI checks.
-
-## License
-
-No license has been selected yet. Standard copyright restrictions apply unless a license is added.
-
-
-## GitHub-based server updates
-
-For an already installed server panel, see [GitHub update instructions](docs/GITHUB-UPDATES.md). The optional update command is:
-
-```bash
-sudo bash install-server.sh --update /absolute/path/to/installed/panel
-```
-
-The updater stages files, backs up current assets, checks PHP syntax, and carries matching customer-specific constants into the updated PHP file. This is currently a development updater using the repository's `main` branch; review the test report before production use.
+- Never publish the generated package or share its configuration files; they may contain SFTP credentials, Telegram tokens, and relay secrets.
+- Keep the backup directory outside any public web document root.
+- Do not use `chmod 777` or run the PHP panel as root.
+- Backups may contain sensitive network configuration. Restrict server access and retention.
+- An automatically opened host firewall port does not override upstream provider firewalls or network ACLs.
+- The self-signed TLS certificate encrypts traffic but produces a browser trust warning.
