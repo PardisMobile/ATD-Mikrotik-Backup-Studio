@@ -600,7 +600,7 @@ bash "$TMP/install-standalone.sh" "$TMP"
         $acl.SetAccessRuleProtection($true, $false)
         foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRule($rule) }
         $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'Allow')
+        $rule = New-Object -TypeName System.Security.AccessControl.FileSystemAccessRule -ArgumentList @($identity, 'FullControl', 'Allow')
         $acl.AddAccessRule($rule)
         Set-Acl -Path $installPath -AclObject $acl
     } catch { Write-Warning 'Could not restrict install.sh permissions automatically. Store the generated-output folder securely.' }
