@@ -19,10 +19,30 @@ if [[ -r /etc/os-release ]]; then
   fi
 fi
 
-if command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y php-cli php-curl openssl socat acl python3
-elif command -v dnf >/dev/null 2>&1; then dnf install -y php-cli php-common php-curl openssl socat acl python3
-elif command -v yum >/dev/null 2>&1; then yum install -y php php-cli php-common php-curl openssl socat acl python3
-else echo 'Supported package managers: apt, dnf, yum.' >&2; exit 5; fi
+# Detect the current server before installing anything. Existing web services are left untouched.
+if systemctl is-active --quiet nginx 2>/dev/null; then echo 'Detected Nginx; ATD will use its own port and will not edit Nginx.'; fi
+if systemctl is-active --quiet apache2 2>/dev/null || systemctl is-active --quiet httpd 2>/dev/null; then echo 'Detected Apache; ATD will use its own port and will not edit Apache.'; fi
+if systemctl is-active --quiet x-ui 2>/dev/null || systemctl is-active --quiet 3x-ui 2>/dev/null; then echo 'Detected an XUI service; its configuration will not be changed.'; fi
+if systemctl is-active --quiet atd-mikrotik-backup-php.service 2>/dev/null; then echo 'Existing ATD installation detected; keeping its panel configuration and assigned ports.'; fi
+
+# Install only when required tools/extensions are missing.
+NEED_PACKAGES=0
+command -v php >/dev/null 2>&1 || NEED_PACKAGES=1
+php -r 'exit(extension_loaded("curl") ? 0 : 1);' 2>/dev/null || NEED_PACKAGES=1
+for cmd in openssl socat setfacl python3; do command -v "$cmd" >/dev/null 2>&1 || NEED_PACKAGES=1; done
+if [[ "$NEED_PACKAGES" -eq 1 ]]; then
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y php-cli php-curl openssl socat acl python3
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y php-cli php-common php-curl openssl socat acl python3
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y php php-cli php-common php-curl openssl socat acl python3
+  else echo 'Supported package managers: apt, dnf, yum.' >&2; exit 5; fi
+else
+  echo 'All required packages are already installed; skipping package installation.'
+fi
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI installation failed.' >&2; exit 6; }
 php -r 'exit(extension_loaded("curl") ? 0 : 1);' || { echo 'PHP cURL is required.' >&2; exit 6; }
 
