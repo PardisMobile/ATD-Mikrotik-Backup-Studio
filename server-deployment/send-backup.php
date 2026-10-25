@@ -188,6 +188,8 @@ function format_bytes(int $bytes): string {
 
 // Automatic server-side scan. RouterOS and the SFTP workflow do not call this endpoint.
 if (PHP_SAPI === 'cli' && in_array('--scan-backups', $argv ?? [], true)) {
+    $lockHandle = @fopen(dirname(STATE_FILE) . '/telegram-scan.lock', 'c');
+    if ($lockHandle === false || !flock($lockHandle, LOCK_EX | LOCK_NB)) exit(0);
     $baselinePath = dirname(STATE_FILE) . '/telegram-scan-started-at';
     $baseline = is_file($baselinePath) ? (int)trim((string)@file_get_contents($baselinePath)) : 0;
     if ($baseline <= 0) {
