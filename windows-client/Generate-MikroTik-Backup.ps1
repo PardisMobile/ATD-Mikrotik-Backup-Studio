@@ -85,7 +85,6 @@ $panelFolderName = Split-Path -Leaf $remoteDir.TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($panelFolderName) -or $panelFolderName -in @('.', '..') -or $panelFolderName -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw 'Remote directory must end with a simple folder name, e.g. /root/uploads or /Upload.' }
 $panelPath = '/' + $panelFolderName + '/send-backup.php'
 
-$relayToken = (New-HexRandom 32) # Retained only for backward compatibility with already-installed RouterOS scripts.
 $maxUploadMb = '45'
 $panelPassword = ''
 
@@ -252,7 +251,6 @@ $createDirCommand = 'mkdir -p -- ' + "'" + $linuxDir.Replace("'", "'\''") + "'"
 [System.IO.File]::WriteAllText((Join-Path $outDir 'create-sftp-directory.txt'), $createDirCommand + [Environment]::NewLine, [System.Text.UTF8Encoding]::new($false))
 
 if ($useTelegram) {
-    $tokenPhp = Escape-PhpSingle $relayToken
     $pathPhp = Escape-PhpSingle $remoteDir
     $passwordSalt = (New-HexRandom 16)
     $pbkdf = New-Object Security.Cryptography.Rfc2898DeriveBytes($panelPassword, (Convert-HexToBytes $passwordSalt), 200000)
@@ -261,6 +259,7 @@ if ($useTelegram) {
     $maxBytes = ([int64]$maxUploadMb) * 1024 * 1024
 
     $php = @'
+<?php
 <?php
 declare(strict_types=1);
 require_once '/etc/atd-mikrotik-backup-studio/config.php';
@@ -494,7 +493,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' || (!empty($_SESSION['admin']) && $_SER
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit('METHOD_NOT_ALLOWED'); }
 $provided = $_SERVER['HTTP_X_BACKUP_TOKEN'] ?? '';
-if (!hash_equals(RELAY_TOKEN, $provided)) { http_response_code(403); exit('FORBIDDEN'); }
+if (!defined('RELAY_TOKEN') || !hash_equals((string)RELAY_TOKEN, $provided)) { http_response_code(403); exit('FORBIDDEN'); }
 $tg = telegram_settings();
 if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) { http_response_code(503); exit('TELEGRAM_NOT_CONFIGURED'); }
 $input = json_decode(file_get_contents('php://input'), true);
@@ -568,7 +567,6 @@ exit('TELEGRAM_FAILED');
     $configPhp = @"
 <?php
 declare(strict_types=1);
-const RELAY_TOKEN = '$tokenPhp';
 const TELEGRAM_BOT_TOKEN = '';
 const TELEGRAM_CHAT_ID = '';
 const PANEL_PASSWORD_SALT = '$passwordSalt';
