@@ -137,6 +137,15 @@ systemctl enable --now atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.s
 systemctl is-active --quiet atd-mikrotik-backup-php.service
 systemctl is-active --quiet atd-mikrotik-backup-tls.service
 
+# Install the ATD-only updater. It never changes the saved customer configuration or backup state.
+UPDATE_TMP=$(mktemp)
+trap 'rm -f -- "$UPDATE_TMP"' EXIT
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+  'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/update-standalone.sh' -o "$UPDATE_TMP"
+[[ -s "$UPDATE_TMP" ]] || { echo 'Could not download the ATD updater; initial install is active, but the updater was not installed.' >&2; exit 9; }
+bash -n "$UPDATE_TMP" || { echo 'Downloaded updater failed shell syntax validation.' >&2; exit 9; }
+install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backup-update
+
 # Do not mutate host-wide firewall policy automatically. The user/provider may need to allow this ATD port.
 FW="No firewall rules were changed. If remote access is required, allow TCP $PUBLIC_PORT in the host/provider firewall after reviewing existing policy."
 
