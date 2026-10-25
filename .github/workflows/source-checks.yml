@@ -21,7 +21,7 @@ jobs:
           source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
           start = source.index("$php = @'") + len("$php = @'")
           end = source.index("\n'@", start)
-          php = source[start:end]
+          php = source[start:end].lstrip()
           for key, value in {
               "__RELAY_TOKEN__": "test-relay-token",
               "__BOT_TOKEN__": "123456:test-bot-token",
