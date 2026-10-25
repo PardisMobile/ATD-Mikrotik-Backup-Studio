@@ -79,7 +79,7 @@ To update an existing installation, run `sudo atd-mikrotik-backup-update`. The u
 - RouterOS continues to create and upload backups through SFTP; RouterOS does not call Telegram or the PHP panel.
 - Router backup schedule is selected in the generator and saved in private config. The panel manages Linux-side Telegram delivery schedule and delay through a root-owned Cron apply worker.
 - New panel passwords require at least 8 characters; the Windows generator asks for confirmation and retries after mismatch/too-short input.
-- Installer and updater are `server-deployment/install-standalone.sh` and `server-deployment/update-standalone.sh`.
+- Installer, updater, and safe uninstaller are `server-deployment/install-standalone.sh`, `server-deployment/update-standalone.sh`, and `server-deployment/uninstall-standalone.sh`. The uninstaller removes only ATD services/app files and preserves the configured backup directory, private configuration, and delivery state.
 
 ### Branch reconciliation
 - `fix/telegram-schedule-and-connection-test` contains 25 commits after common base `15022946ec458758eff516968ee1cfcce7f673e3`; `main` contains its own 8 commits after that same base. The histories are divergent, so do not merge blindly or delete the branch until every unique change has been reviewed.
