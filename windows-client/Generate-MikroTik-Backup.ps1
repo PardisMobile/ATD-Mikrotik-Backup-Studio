@@ -195,7 +195,7 @@ $telegramBlock = @"
 "@
 }
 
-$cleanupCondition = if ($useTelegram) { '($backupOK = true) && ($sftpOK = true) && ($telegramOK = true)' } else { '($backupOK = true) && ($sftpOK = true)' }
+$cleanupCondition = '($backupOK = true) && ($sftpOK = true)'
 $telegramInit = if ($useTelegram) { '$telegramOK false' } else { '$telegramOK true' }
 
 $routerScript = @"
@@ -259,7 +259,7 @@ $(if ($deleteAfterUpload) {
         ':if (' + $cleanupCondition + ') do={'
         '    :do {'
         '        /file remove [/file find where name=$localFile]'
-        '        :log info ("BACKUP: delivery confirmed; local file removed: " . $localFile)'
+        '        :log info ("BACKUP: SFTP upload completed; local file removed: " . $localFile)'
         '    } on-error={'
         '        :log error ("BACKUP: delivery succeeded but local cleanup failed: " . $localFile)'
         '    }'
