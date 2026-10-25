@@ -19,10 +19,8 @@ if [[ -r /etc/os-release ]]; then
   fi
 fi
 
-# Detect the current server before installing anything. Existing web services are left untouched.
-if systemctl is-active --quiet nginx 2>/dev/null; then echo 'Detected Nginx; ATD will use its own port and will not edit Nginx.'; fi
-if systemctl is-active --quiet apache2 2>/dev/null || systemctl is-active --quiet httpd 2>/dev/null; then echo 'Detected Apache; ATD will use its own port and will not edit Apache.'; fi
-if systemctl is-active --quiet x-ui 2>/dev/null || systemctl is-active --quiet 3x-ui 2>/dev/null; then echo 'Detected an XUI service; its configuration will not be changed.'; fi
+# Do not try to identify third-party panels or web stacks. Only recognize our own service
+# for safe re-install behavior; all third-party services/configuration remain out of scope.
 if systemctl is-active --quiet atd-mikrotik-backup-php.service 2>/dev/null; then echo 'Existing ATD installation detected; keeping its panel configuration and assigned ports.'; fi
 
 # Install only when required tools/extensions are missing.
