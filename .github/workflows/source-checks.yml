@@ -112,6 +112,10 @@ jobs:
               raise SystemExit("Updater must stage and validate before modifying live services")
           if "ATD_SOURCE_COMMIT" not in runtime or "SOURCE_COMMIT" not in runtime:
               raise SystemExit("Runtime installer must use the bootstrap's pinned source commit for updater download")
+          if 'BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR' not in runtime or ' "$TLS/config.php"' not in runtime:
+              raise SystemExit("Re-installs must derive BACKUP_DIR from the preserved private config")
+          if 'mkdir -p "$APP" "$STATE/sessions" "$TLS"' not in runtime:
+              raise SystemExit("Re-installs must not create a new package backup path before preserving config")
           for script in (runtime, updater):
               if "/etc/cron.d/atd-mikrotik-backup-telegram" not in script or "--scan-backups" not in script:
                   raise SystemExit("Installer/updater must install the dedicated ATD cron scan")
