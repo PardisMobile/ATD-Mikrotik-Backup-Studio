@@ -211,7 +211,7 @@ $routerScript = @"
 
 :do {
     /system backup save name=`$fn dont-encrypt=yes
-    :delay 3s
+    :delay 10s
     :local ids [/file find where name=`$localFile]
     :if ([:len `$ids] = 0) do={ :error "Backup file not found" }
     :local sz [/file get `$ids size]
