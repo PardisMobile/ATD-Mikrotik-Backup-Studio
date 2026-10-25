@@ -92,6 +92,15 @@ jobs:
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
           if "atd-mikrotik-backup-telegram-worker.timer" not in updater:
               raise SystemExit("Updater must deploy the automatic Telegram worker")
+          config_start = source.index("$configPhp = @\"")
+          config_end = source.index("\n\"@", config_start)
+          generated_config = source[config_start:config_end]
+          if "RELAY_TOKEN" in generated_config:
+              raise SystemExit("New private configs must not depend on the legacy RouterOS relay token")
+          if "$cleanupCondition = '($backupOK = true) && ($sftpOK = true)'" not in source:
+              raise SystemExit("Local cleanup must depend only on successful backup and SFTP")
+          if "Keep local file? [Y/N]" not in source or "$deleteAfterUpload = $keepLocal -match" not in source:
+              raise SystemExit("User-selectable local backup retention must remain in the generator")
           if "const PUBLIC_PORT = $publicPort;" not in generator:
               raise SystemExit("Private config must persist the selected public port")
           if "PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;'" not in runtime:
