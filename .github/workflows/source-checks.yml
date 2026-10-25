@@ -20,7 +20,7 @@ jobs:
           from pathlib import Path
           source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
           start = source.index("$php = @'") + len("$php = @'")
-          end = source.index("\\n'@", start)
+          end = source.index("\n'@", start)
           php = source[start:end]
           for key, value in {
               "__RELAY_TOKEN__": "test-relay-token",
