@@ -594,7 +594,13 @@ else
   find "$BACKUP_DIR" -maxdepth 1 -type f -name "*.backup" -exec setfacl -m "u:$WEBUSER:r--" {} \; 2>/dev/null || true
   setfacl -d -m "u:$WEBUSER:r--" "$BACKUP_DIR" 2>/dev/null || true
 fi
-if ! sudo -u "$WEBUSER" test -r "$BACKUP_DIR" -a -w "$BACKUP_DIR" -a -x "$BACKUP_DIR"; then echo "Installed files, but $WEBUSER lacks required read/write/traverse access to $BACKUP_DIR. Review ACLs manually." >&2; exit 11; fi
+if command -v runuser >/dev/null 2>&1; then
+  if ! runuser -u "$WEBUSER" -- test -r "$BACKUP_DIR" -a -w "$BACKUP_DIR" -a -x "$BACKUP_DIR"; then echo "Installed files, but $WEBUSER lacks required read/write/traverse access to $BACKUP_DIR. Review ACLs manually." >&2; exit 11; fi
+elif command -v sudo >/dev/null 2>&1; then
+  if ! sudo -u "$WEBUSER" test -r "$BACKUP_DIR" -a -w "$BACKUP_DIR" -a -x "$BACKUP_DIR"; then echo "Installed files, but $WEBUSER lacks required read/write/traverse access to $BACKUP_DIR. Review ACLs manually." >&2; exit 11; fi
+else
+  echo "Files installed, but cannot verify web-worker access (runuser/sudo unavailable). Check ACLs manually before testing." >&2
+fi
 cat <<EOF
 
 ATD files installed into: $TARGET
@@ -655,8 +661,9 @@ TELEGRAM SETUP
 3. Find the numeric destination chat ID. It can be your private chat, a group, or a channel where the bot is allowed to post.
 4. Run the generator and choose SFTP + Telegram. Enter the bot token, destination chat ID, and a strong panel password. The relay token is generated automatically.
 5. Upload the generated files to the server. From the uploaded package run: sudo bash install-server.sh /absolute/path/under/existing-webroot/atd-backup. Use an existing website document root and its HTTPS domain; the script does not alter global Nginx/Apache configuration or open a new port. PHP cURL and ACL tools may be required.
-6. Test with local backup retention enabled first. Confirm that the file arrives in Telegram before choosing local deletion.
-7. To check for compatible server-panel updates later, without rerunning this generator, run the generated install-server.sh in update mode:
+6. After installation, the installer prints the panel URL. It will look like https://YOUR-DOMAIN/atd-backup/send-backup.php (replace YOUR-DOMAIN and the path with your real domain/path). Open that HTTPS URL in a browser and sign in with the panel password entered in the generator. If it does not load, verify that the chosen folder is inside the actual website document root and that HTTPS/PHP are configured for that domain.
+7. Test the panel login, list of backup files, manual Telegram send/retry, password change and deletion only with a test backup first. Confirm the file arrives in Telegram before choosing local deletion.
+8. To check for compatible server-panel updates later, without rerunning this generator, run the generated install-server.sh in update mode:
    sudo bash install-server.sh --update "/absolute/path/to/installed/panel"
    The updater preserves a timestamped backup and skips PHP replacement when it detects the legacy generated PHP schema, protecting customer settings/state until a compatible PHP migration is published. CSS/JS updates can still be applied.
 
