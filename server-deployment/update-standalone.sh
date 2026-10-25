@@ -56,42 +56,19 @@ rollback(){
   done
   if [[ -f "$BACKUP/cron-helper.sh" ]]; then cp -p "$BACKUP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
   else rm -f /usr/local/sbin/atd-mikrotik-backup-cron; fi
-  if [[ -f "$BACKUP/cron-helper.sudoers" ]]; then cp -p "$BACKUP/cron-helper.sudoers" /etc/sudoers.d/atd-mikrotik-backup-cron
-  else rm -f /etc/sudoers.d/atd-mikrotik-backup-cron; fi
-  if [[ -f "$BACKUP/cron-helper.service" ]]; then cp -p "$BACKUP/cron-helper.service" /etc/systemd/system/atd-mikrotik-backup-cron.service
-  else rm -f /etc/systemd/system/atd-mikrotik-backup-cron.service; fi
-  systemctl daemon-reload 2>/dev/null || true
   chown root:atdbackup "$APP/send-backup.php" "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
   chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true
 }
-# Preserve existing helper, service, and sudoers so rollback can restore them.
+# Preserve the existing helper so rollback can restore it.
 [[ ! -e /usr/local/sbin/atd-mikrotik-backup-cron ]] || cp -p /usr/local/sbin/atd-mikrotik-backup-cron "$BACKUP/cron-helper.sh"
-[[ ! -e /etc/systemd/system/atd-mikrotik-backup-cron.service ]] || cp -p /etc/systemd/system/atd-mikrotik-backup-cron.service "$BACKUP/cron-helper.service"
-[[ ! -e /etc/sudoers.d/atd-mikrotik-backup-cron ]] || cp -p /etc/sudoers.d/atd-mikrotik-backup-cron "$BACKUP/cron-helper.sudoers"
 install -o root -g root -m 0750 "$TMP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
-cat > /etc/systemd/system/atd-mikrotik-backup-cron.service <<'UNIT'
-[Unit]
-Description=Apply ATD MikroTik Backup Studio Cron schedule
-[Service]
-Type=oneshot
-User=root
-Group=root
-ExecStart=/usr/local/sbin/atd-mikrotik-backup-cron --apply
-ProtectSystem=strict
-ReadWritePaths=/etc/cron.d
-PrivateTmp=true
-NoNewPrivileges=true
-UNIT
-command -v visudo >/dev/null 2>&1 || { echo 'visudo is required to validate the ATD sudoers rule.' >&2; exit 4; }
-SUDOERS_TMP=$(mktemp)
-printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/bin/systemctl start atd-mikrotik-backup-cron.service' > "$SUDOERS_TMP"
-chmod 0440 "$SUDOERS_TMP"
-if ! visudo -cf "$SUDOERS_TMP" >/dev/null; then rm -f "$SUDOERS_TMP"; echo 'ATD sudoers rule validation failed.' >&2; exit 4; fi
-install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/atd-mikrotik-backup-cron
-rm -f "$SUDOERS_TMP"
-systemctl daemon-reload
+cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
+* * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
+CRON
+chown root:root /etc/cron.d/atd-mikrotik-backup-apply
+chmod 0644 /etc/cron.d/atd-mikrotik-backup-apply
 install -o root -g atdbackup -m 0640 "$TMP/send-backup.php" "$APP/send-backup.php.new"
 install -o root -g atdbackup -m 0644 "$TMP/panel.css" "$APP/panel.css.new"
 install -o root -g atdbackup -m 0644 "$TMP/panel.js" "$APP/panel.js.new"
