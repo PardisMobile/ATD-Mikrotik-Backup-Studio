@@ -376,11 +376,8 @@ function normalize_backup_times(string $input): ?array {
     }
     return $times;
 }
-function apply_delivery_cron(): bool {
-    if (!function_exists('exec')) return false;
-    $output = []; $code = 1;
-    @exec('sudo -n /usr/bin/systemctl start atd-mikrotik-backup-cron.service 2>&1', $output, $code);
-    return $code === 0;
+function cron_apply_worker_available(): bool {
+    return is_file('/etc/cron.d/atd-mikrotik-backup-apply') && is_readable('/etc/cron.d/atd-mikrotik-backup-apply');
 }
 function latest_backup_name(): ?string {
     $base = realpath(BACKUP_DIR);
@@ -448,12 +445,12 @@ function render_panel(): void {
                 $oldState=load_state(); $oldSchedule=$oldState['_delivery_schedule']??null;
                 $oldState['_delivery_schedule']=['backup_times'=>$times,'delay_minutes'=>(int)$delayRaw,'updated_at'=>gmdate('c')];
                 if (!save_state($oldState)) $_SESSION['flash']=['ok'=>false,'message'=>'STATE_SAVE_FAILED'];
-                elseif (!apply_delivery_cron()) {
+                elseif (!cron_apply_worker_available()) {
                     $restored=load_state();
                     if ($oldSchedule===null) unset($restored['_delivery_schedule']); else $restored['_delivery_schedule']=$oldSchedule;
-                    save_state($restored); apply_delivery_cron();
-                    $_SESSION['flash']=['ok'=>false,'message'=>'CRON_UPDATE_FAILED'];
-                } else $_SESSION['flash']=['ok'=>true,'message'=>'DELIVERY_SCHEDULE_SAVED'];
+                    save_state($restored);
+                    $_SESSION['flash']=['ok'=>false,'message'=>'CRON_UPDATE_WORKER_MISSING'];
+                } else $_SESSION['flash']=['ok'=>true,'message'=>'DELIVERY_SCHEDULE_SAVED (Cron applies within one minute)'];
             }
         }
         header('Location: '.$_SERVER['PHP_SELF']); exit;
@@ -635,6 +632,11 @@ else
 fi
 chown root:root "$tmp"
 chmod 0644 "$tmp"
+if [[ -r "$CRON_FILE" ]] && cmp -s "$tmp" "$CRON_FILE"; then
+  rm -f -- "$tmp"
+  trap - EXIT
+  exit 0
+fi
 mv -f -- "$tmp" "$CRON_FILE"
 trap - EXIT
 echo "ATD Telegram cron schedule applied."
