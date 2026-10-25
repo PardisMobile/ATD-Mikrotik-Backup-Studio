@@ -59,7 +59,19 @@ jobs:
           subprocess.run(["bash", "-n", str(path)], check=True)
           if "send-backup.php panel.css panel.js" in installer:
               raise SystemExit("Bootstrap must not require separate panel files from the user")
-          print("Canonical PHP/CSS/JS templates match; generated bootstrap syntax is valid.")
+          generator = source
+          runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
+          if "https://' + $sftpHost.Trim() + ':' + $publicPort + '/send-backup.php'" not in generator:
+              raise SystemExit("Generated relay URL must use the configured public port and root endpoint")
+          if "const PUBLIC_PORT = $publicPort;" not in generator:
+              raise SystemExit("Private config must persist the selected public port")
+          if "PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;'" not in runtime:
+              raise SystemExit("Server installer must use the configured public port")
+          if "session.save_path=/var/lib/atd-mikrotik-backup-studio/sessions" not in runtime:
+              raise SystemExit("PHP session path must be writable under the service sandbox")
+          if 'echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"' not in runtime:
+              raise SystemExit("Installer must print the actual panel endpoint")
+          print("Canonical assets match; bootstrap syntax and panel URL/session invariants are valid.")
           PY
   shell-check:
     runs-on: ubuntu-latest
