@@ -549,6 +549,12 @@ set -Eeuo pipefail
 [[ $(id -u) -eq 0 ]] || { echo 'Run with sudo: sudo bash install-server.sh' >&2; exit 2; }
 SRC="$(cd "$(dirname "$0")" && pwd)"
 for f in send-backup.php panel.css panel.js; do [[ -f "$SRC/$f" ]] || { echo "Missing $f; extract the complete generated package." >&2; exit 3; }; done
+if ! command -v curl >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y curl ca-certificates
+  elif command -v dnf >/dev/null 2>&1; then dnf install -y curl ca-certificates
+  elif command -v yum >/dev/null 2>&1; then yum install -y curl ca-certificates
+  else echo 'Cannot bootstrap curl: apt, dnf, or yum is required.' >&2; exit 4; fi
+fi
 TMP="$(mktemp)"; trap 'rm -f -- "$TMP"' EXIT
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/install-standalone.sh' -o "$TMP"
 [[ -s "$TMP" ]] || { echo 'Could not download the ATD standalone installer.' >&2; exit 4; }
