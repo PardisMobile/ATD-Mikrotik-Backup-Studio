@@ -639,7 +639,7 @@ mv -f -- "$tmp" "$CRON_FILE"
 trap - EXIT
 echo "ATD Telegram cron schedule applied."
 '@
-    $cronHelperHash = Get-Sha256Text ($cronHelper + "`n")
+    $cronHelperHash = Get-Sha256Text $cronHelper
 
     $css = @'
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&display=swap');
