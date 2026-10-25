@@ -89,13 +89,14 @@ PY
 }
 # Preserve allocated ports on repeat runs. Avoid breaking a running deployment with a new URL.
 REQUESTED_PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;' "$SRC/config.php")
-if [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+$' "$TLS/ports.env" && grep -Eq '^BACKEND_PORT=[0-9]+$' "$TLS/ports.env"; then
+if [[ -e "$TLS/ports.env" ]]; then
+  [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+$' "$TLS/ports.env" && grep -Eq '^BACKEND_PORT=[0-9]+$' "$TLS/ports.env" || { echo "Existing ports.env is invalid; refusing to choose new ports automatically." >&2; exit 7; }
   # shellcheck disable=SC1090
   source "$TLS/ports.env"
   [[ "$PUBLIC_PORT" == "$REQUESTED_PUBLIC_PORT" ]] || { echo "The installed panel uses port $PUBLIC_PORT, but this generated package expects $REQUESTED_PUBLIC_PORT. Re-run the Windows generator using the existing port." >&2; exit 7; }
 else
-  PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;' "$SRC/config.php")
-  [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 ]] || { echo 'Missing/invalid PUBLIC_PORT in generated configuration.' >&2; exit 7; }
+  PUBLIC_PORT="$REQUESTED_PUBLIC_PORT"
+  [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 ]] || { echo "Missing/invalid PUBLIC_PORT in generated configuration." >&2; exit 7; }
   python3 - "$PUBLIC_PORT" <<'PYPORT'
 import socket,sys
 port=int(sys.argv[1])
@@ -154,7 +155,12 @@ NoNewPrivileges=true
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable --now atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
+systemctl enable atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
+if systemctl is-active --quiet atd-mikrotik-backup-php.service 2>/dev/null; then
+  systemctl restart atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
+else
+  systemctl start atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
+fi
 systemctl is-active --quiet atd-mikrotik-backup-php.service
 systemctl is-active --quiet atd-mikrotik-backup-tls.service
 
