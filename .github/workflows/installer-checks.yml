@@ -25,9 +25,10 @@ jobs:
           grep -q 'NEED_PACKAGES' server-deployment/install-standalone.sh
           grep -q 'php -l "\$APP/send-backup.php"' server-deployment/install-standalone.sh
           grep -q 'ReadWritePaths=/var/lib/atd-mikrotik-backup-studio' server-deployment/install-standalone.sh
-          ! grep -q 'cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer' server-deployment/install-standalone.sh
-          ! grep -q 'OnUnitActiveSec=' server-deployment/install-standalone.sh
-          grep -q 'X-Backup-Token' windows-client/Generate-MikroTik-Backup.ps1
+          grep -q '/etc/cron.d/atd-mikrotik-backup-telegram' server-deployment/install-standalone.sh
+          grep -q -- '--scan-backups' server-deployment/install-standalone.sh
+          ! grep -q 'X-Backup-Token' windows-client/Generate-MikroTik-Backup.ps1
+          ! grep -q 'const TRIGGER_TOKEN' windows-client/Generate-MikroTik-Backup.ps1
           grep -q 'ProtectSystem=strict' server-deployment/install-standalone.sh
           ! grep -q 'chmod 777' server-deployment/install-standalone.sh
           ! grep -Eq 'sed .*nginx|tee .*nginx|systemctl (stop|disable|restart) nginx' server-deployment/install-standalone.sh
