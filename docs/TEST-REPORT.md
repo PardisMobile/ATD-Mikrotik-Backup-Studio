@@ -17,3 +17,14 @@ Last reviewed: 2026-10-25.
 
 ## Required release gate
 Do not label this release production-ready until the exact PowerShell generator/icon are restored, the generated installer invokes the update option, and tests pass on a clean test server for both SFTP-only and Telegram/panel modes. Verify that updates preserve all customer-specific values and that rollback works after a deliberately invalid staged PHP file.
+
+
+## Additional checks performed (2026-10-25)
+- Registered the full integrated PowerShell generator source at `windows-client/Generate-MikroTik-Backup.ps1`; source includes the server PHP/CSS/JS generation and the post-install GitHub update command.
+- Fixed the generated server installer so it detects the web worker account before applying file ownership, and prints an example HTTPS panel URL after installation.
+- Added a `runuser`-first permission check with a `sudo` fallback, avoiding a hard dependency on `sudo` when `runuser` is available.
+- Extracted the embedded generated PHP with test-only placeholder values: `php -l` passed.
+- Extracted the generated server installer: `bash -n` passed.
+- Ran the generated PHP endpoint on PHP's local development server; the panel login page returned HTTP 200 and rendered the Persian login heading.
+- Not tested: a real RouterOS device, live SFTP transfer, real Telegram bot delivery, real HTTPS virtual host, production PHP-FPM user/ACL setup, or a complete live GitHub update against an installed server.
+- Compatibility safeguard: the current GitHub updater intentionally skips replacing the generated PHP when it detects the generator's legacy constants/state schema. It updates CSS/JS only in that case, protecting customer-specific constants and state. A schema-compatible PHP migration is still required before PHP code can be safely updated for those installations.
