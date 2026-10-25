@@ -689,6 +689,12 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
 
     $cssHash = Get-Sha256Text $css
     $jsHash = Get-Sha256Text $js
+    # Package the exact assets used to calculate the checksums. Never fetch mutable
+    # main-branch copies during installation, as that can cause false checksum failures.
+    $phpB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($phpTemplate))
+    $cssB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($css))
+    $jsB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($js))
+    $cronHelperB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($cronHelper))
 
     $installServer = @'
 #!/usr/bin/env bash
@@ -700,23 +706,22 @@ command -v curl >/dev/null 2>&1 || {
   elif command -v yum >/dev/null 2>&1; then yum install -y curl ca-certificates
   else echo 'Cannot install curl: apt, dnf, or yum is required.' >&2; exit 4; fi
 }
-BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
 TMP="$(mktemp -d /tmp/atd-bootstrap.XXXXXX)"
 chmod 0700 "$TMP"
 trap 'rm -rf -- "$TMP"' EXIT
-fetch_asset() {
-  local name="$1" expected="$2"
-  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$name" -o "$TMP/$name"
-  [[ -s "$TMP/$name" ]] || { echo "Downloaded asset is empty: $name" >&2; exit 5; }
+write_asset() {
+  local name="$1" payload="$2" expected="$3"
+  printf '%s' "$payload" | base64 --decode > "$TMP/$name"
+  [[ -s "$TMP/$name" ]] || { echo "Packaged asset is empty: $name" >&2; exit 5; }
   printf '%s  %s\n' "$expected" "$TMP/$name" | sha256sum --check --status || {
-    echo "Asset checksum mismatch: $name. This package and GitHub assets are from different revisions; regenerate the package." >&2
+    echo "Packaged asset checksum mismatch: $name. The generated package is internally inconsistent." >&2
     exit 5
   }
 }
-fetch_asset 'send-backup.php' '__PHP_SHA256__'
-fetch_asset 'panel.css' '__CSS_SHA256__'
-fetch_asset 'panel.js' '__JS_SHA256__'
-fetch_asset 'cron-helper.sh' '__CRON_HELPER_SHA256__'
+write_asset 'send-backup.php' '__PHP_B64__' '__PHP_SHA256__'
+write_asset 'panel.css' '__CSS_B64__' '__CSS_SHA256__'
+write_asset 'panel.js' '__JS_B64__' '__JS_SHA256__'
+write_asset 'cron-helper.sh' '__CRON_HELPER_B64__' '__CRON_HELPER_SHA256__'
 printf '%s' '__CONFIG_B64__' | base64 --decode > "$TMP/config.php"
 chmod 0600 "$TMP/config.php"
 if command -v php >/dev/null 2>&1; then
@@ -727,7 +732,11 @@ curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-ti
 chmod 0600 "$TMP/install-standalone.sh"
 bash "$TMP/install-standalone.sh" "$TMP"
 '@
-    $installServer = $installServer.Replace('__PHP_SHA256__', $phpHash).
+    $installServer = $installServer.Replace('__PHP_B64__', $phpB64).
+                                    Replace('__CSS_B64__', $cssB64).
+                                    Replace('__JS_B64__', $jsB64).
+                                    Replace('__CRON_HELPER_B64__', $cronHelperB64).
+                                    Replace('__PHP_SHA256__', $phpHash).
                                     Replace('__CSS_SHA256__', $cssHash).
                                     Replace('__JS_SHA256__', $jsHash).
                                     Replace('__CRON_HELPER_SHA256__', $cronHelperHash).
