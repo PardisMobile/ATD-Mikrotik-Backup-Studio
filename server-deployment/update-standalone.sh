@@ -8,11 +8,7 @@ STATE=/var/lib/atd-mikrotik-backup-studio
 BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
 for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installation not found ($path)." >&2; exit 3; }; done
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
-if ! grep -q "const TRIGGER_TOKEN" "$TLS/config.php"; then
-  echo 'This installation predates the authenticated post-SFTP callback. Generate a fresh package in the Windows generator and run its private install.sh once; the updater cannot infer the trigger secret from PHP assets.' >&2
-  exit 3
-fi
-# Remove legacy automatic scanners/workers; the new flow is triggered by the post-SFTP callback.
+# Remove obsolete ATD-only scanner/worker units from previous releases; the cron job below replaces them.
 LEGACY_UNITS=(
   atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
   atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
@@ -76,8 +72,41 @@ if ! php -l "$APP/send-backup.php" >/dev/null || ! systemctl restart atd-mikroti
   rollback
   exit 7
 fi
+# Ensure cron is available without editing any existing crontabs.
+if ! systemctl is-active --quiet cron.service 2>/dev/null && ! systemctl is-active --quiet crond.service 2>/dev/null; then
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y cron
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y cronie
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y cronie
+  else
+    echo 'A running cron service is required for automatic Telegram delivery.' >&2; exit 4
+  fi
+fi
+if systemctl cat cron.service >/dev/null 2>&1; then
+  systemctl enable --now cron.service
+elif systemctl cat crond.service >/dev/null 2>&1; then
+  systemctl enable --now crond.service
+else
+  echo 'Could not locate the cron service after installation.' >&2; exit 4
+fi
+if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
+  date +%s > "$STATE/telegram-scan-started-at"
+  chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
+  chmod 0600 "$STATE/telegram-scan-started-at"
+fi
+cat > /etc/cron.d/atd-mikrotik-backup-telegram <<'CRON'
+* * * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1
+CRON
+chown root:root /etc/cron.d/atd-mikrotik-backup-telegram
+chmod 0644 /etc/cron.d/atd-mikrotik-backup-telegram
+
 echo "ATD application updated successfully."
 echo "Private configuration preserved: $TLS/config.php"
 echo "Delivery state and backups preserved: $STATE and configured backup directory."
 echo "Pre-update application backup: $BACKUP"
-echo "No other system services or firewall rules were changed."
+echo "No third-party web-server configuration or firewall rules were changed."
+echo "ATD Telegram cron: /etc/cron.d/atd-mikrotik-backup-telegram (every minute)."
