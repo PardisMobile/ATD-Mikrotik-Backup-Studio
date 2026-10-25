@@ -51,7 +51,6 @@ The generator also creates `create-sftp-directory.txt`, containing a command for
 - `paste-into-routeros-terminal.txt`: complete RouterOS script and scheduler setup.
 - `install.sh`: private server bootstrap, generated only in Telegram/Panel mode.
 - `create-sftp-directory.txt`: command to create the configured SFTP directory.
-- `router-backup.rsc`: RouterOS script source.
 
 ## Update
 Run `sudo atd-mikrotik-backup-update` on the Linux server. The updater stages and syntax-checks new application code, backs up the previous code, and preserves private configuration, delivery state, and uploaded backups. It restarts only the ATD PHP service.
