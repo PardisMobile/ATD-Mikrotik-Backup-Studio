@@ -6,7 +6,7 @@ These rules are the project's source of truth. Future implementation, refactorin
 
 ### 1. Existing working core
 - The baseline is MikroTik Backup Studio v3 with working RouterOS 7 scheduled backups over SFTP.
-- Preserve the working backup core. Add the server panel and optional Telegram delivery around it; do not replace it with a separate incompatible implementation.
+- Preserve the working backup core. Add the server panel and optional server-side Telegram delivery around it; new RouterOS scripts must not depend on Telegram HTTP/relay calls.
 - Do not regress already verified/frozen functionality or repeat completed work without a demonstrated reason.
 
 ### 2. Initial Excel/EXE configuration is authoritative
@@ -19,7 +19,7 @@ These rules are the project's source of truth. Future implementation, refactorin
 ### 3. One-command server bootstrap from the generated output
 - The EXE must produce a server-specific output/package that carries the initial configuration needed to bootstrap that installation, as well as the RouterOS-side output.
 - The user transfers the server bootstrap output to the Linux server, copies/pastes the single provided command, and presses Enter.
-- That command must automatically configure the server using the initial values collected by the EXE: create required directories/files, install only missing prerequisites, configure the ATD panel and Telegram integration, and fetch shared/versioned application components from GitHub when needed.
+- That command must automatically configure the server using the initial values collected by the EXE: create required directories/files, install only missing prerequisites, configure the ATD panel, the server-side Telegram worker timer, and fetch shared/versioned application components from GitHub when needed.
 - The user must not be asked to manually transfer or construct individual PHP, CSS, JavaScript, or other internal panel files.
 - The install command and its prerequisites must be clearly identified in the generated output and in the README. Keep the workflow simple for non-technical users.
 
