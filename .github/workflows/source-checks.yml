@@ -102,10 +102,10 @@ jobs:
           generated_config = source[config_start:config_end]
           if "TRIGGER_TOKEN" in generated_config or "RELAY_TOKEN" in generated_config:
               raise SystemExit("New private configs must not depend on RouterOS callback tokens")
-          if "const TELEGRAM_BOT_TOKEN = '$(Escape-PhpSingle $telegramBotToken)';" not in generated_config:
-              raise SystemExit("Generator must persist the Telegram bot token in private config")
-          if "const TELEGRAM_CHAT_ID = '$(Escape-PhpSingle $telegramChatId)';" not in generated_config:
-              raise SystemExit("Generator must persist the Telegram chat ID in private config")
+          if "const TELEGRAM_BOT_TOKEN = '';" not in generated_config or "const TELEGRAM_CHAT_ID = '';" not in generated_config:
+              raise SystemExit("Generator must leave Telegram credentials to the authenticated panel settings")
+          if "Telegram bot token from @BotFather" in source or "Telegram destination Chat ID" in source:
+              raise SystemExit("Windows generator must not prompt for Telegram bot token or Chat ID")
           if "$cleanupCondition = '($backupOK = true) && ($sftpOK = true)'" not in source:
               raise SystemExit("Local cleanup must depend only on successful backup and SFTP")
           if "Keep local file? [Y/N]" not in source or "$deleteAfterUpload = $keepLocal -match" not in source:
