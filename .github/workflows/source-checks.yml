@@ -85,7 +85,7 @@ jobs:
             [ref]$errors
           ) | Out-Null
           if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
+            $errors | ForEach-Object { Write-Error ("Line {0}, column {1}: {2} [token: {3}]" -f $_.Extent.StartLineNumber, $_.Extent.StartColumnNumber, $_.Message, $_.Extent.Text) }
             exit 1
           }
           Write-Host 'PowerShell generator parsed successfully.'
