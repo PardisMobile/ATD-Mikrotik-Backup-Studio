@@ -20,7 +20,7 @@ ATD MikroTik Backup Studio automates scheduled MikroTik RouterOS 7 backups, tran
 
 - Windows computer to generate the RouterOS configuration.
 - MikroTik RouterOS 7 with SFTP access to the backup server.
-- Linux server with internet access and a supported package manager (apt, dnf, or yum) for automatic installation.
+- Linux server with internet access, root/sudo access, systemd, and a supported package manager (apt, dnf, or yum) for automatic installation. Ubuntu 22.04 LTS or newer is the defined Ubuntu baseline; other distributions using dnf/yum may require distribution-specific validation.
 - Root/sudo access on the server.
 - Telegram bot token and destination chat ID only if Telegram delivery is enabled.
 
@@ -49,7 +49,7 @@ ATD MikroTik Backup Studio automates scheduled MikroTik RouterOS 7 backups, tran
    sudo bash install-server.sh
    ```
 
-3. The installer installs required packages, sets up the isolated ATD service, selects a port, creates a TLS certificate, and attempts to allow the port in a recognized host firewall.
+3. The installer installs required packages, validates the generated PHP file with `php -l`, sets up the isolated ATD service, preserves assigned ports on repeat runs, creates a TLS certificate, and attempts to allow the port in a recognized host firewall.
 4. Open the URL printed at the end of installation. It uses the server IP and selected port; no domain or subdomain is required.
 
 ### 4. Browser certificate warning
@@ -66,5 +66,6 @@ Sign in with the panel password configured during generation. Review uploaded ba
 - Keep the backup directory outside any public web document root.
 - Do not use `chmod 777` or run the PHP panel as root.
 - Backups may contain sensitive network configuration. Restrict server access and retention.
-- An automatically opened host firewall port does not override upstream provider firewalls or network ACLs.
+- An automatically opened host firewall port does not override upstream provider firewalls or network ACLs. If no supported firewall manager is detected, the installer reports that it did not change firewall rules.
+- The installer syntax and static safety checks are configured in GitHub Actions. This is not a substitute for an end-to-end installation test on each supported server image; verify the generated URL, login, backup listing, send/retry, delete, password change, and RouterOS upload before production use.
 - The self-signed TLS certificate encrypts traffic but produces a browser trust warning.
