@@ -163,7 +163,18 @@ $passEsc = Escape-RouterString $sftpPass
 $dirEsc = Escape-RouterString $remoteDir
 
 $telegramBlock = if ($useTelegram) {
-    '# Telegram delivery is handled automatically by the Linux server after the SFTP upload.'
+    $relayToken = Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpHost.ToLowerInvariant() + ":" + $sftpUser + ":" + $sftpPass)
+    $relayTokenEsc = Escape-RouterString $relayToken
+    @(
+        ':if ($sftpOK) do={'
+        '    :do {'
+        '        /tool fetch url=("https://" . $sftpHost . ":' + $publicPort + '/send-backup.php") http-method=post http-header-field=("X-Backup-Token: ' + $relayTokenEsc + ',Content-Type: application/json") http-data=("{\"file\":\"" . $localFile . "\"}") check-certificate=no output=none keep-result=no'
+        '        :log info ("BACKUP: server notified for Telegram delivery: " . $localFile)'
+        '    } on-error={'
+        '        :log warning ("BACKUP: SFTP succeeded but Telegram notification failed: " . $localFile)'
+        '    }'
+        '}'
+    ) -join [Environment]::NewLine
 } else {
     '# Telegram disabled by generator choice.'
 }
@@ -262,9 +273,9 @@ if ($useTelegram) {
 <?php
 declare(strict_types=1);
 require_once '/etc/atd-mikrotik-backup-studio/config.php';
-const STABILITY_CHECKS = 3;
+const STABILITY_CHECKS = 2;
 const STABILITY_INTERVAL_SECONDS = 2;
-const MAX_WAIT_SECONDS = 90;
+const MAX_WAIT_SECONDS = 30;
 
 if (PHP_SAPI !== 'cli') session_name_guard();
 
@@ -333,13 +344,13 @@ function send_telegram_file(string $name, bool $force = false): array {
     if ($base === false || !preg_match('/\A[A-Za-z0-9_. -]+\.backup\z/', $name) || basename($name) !== $name) return [false, 'INVALID_FILENAME'];
     $path = realpath($base . DIRECTORY_SEPARATOR . $name);
     if ($path === false || dirname($path) !== $base || !is_file($path) || !is_readable($path)) return [false, 'FILE_NOT_FOUND'];
-    $deadline=time()+MAX_WAIT_SECONDS; $stable=0; $lastSize=-1; $lastMtime=-1;
+    $deadline=time()+MAX_WAIT_SECONDS; $stable=0; $lastSize=-1;
     do {
         clearstatcache(true,$path); $sz=@filesize($path); $mt=@filemtime($path);
-        if ($sz === false || $mt === false || $sz < 1) $stable=0;
-        elseif ($sz === $lastSize && $mt === $lastMtime) $stable++;
+        if ($sz === false || $sz < 1) $stable=0;
+        elseif ($sz === $lastSize) $stable++;
         else $stable=0;
-        $lastSize=$sz===false?-1:$sz; $lastMtime=$mt===false?-1:$mt;
+        $lastSize=$sz===false?-1:$sz;
         if ($stable >= STABILITY_CHECKS) break;
         sleep(STABILITY_INTERVAL_SECONDS);
     } while (time() < $deadline);
@@ -447,118 +458,35 @@ function format_bytes(int $bytes): string {
     return number_format($value, $value<10?1:0).' '.$units[$i];
 }
 
-if (PHP_SAPI === 'cli' && in_array('--worker', $argv ?? [], true)) {
-    $marker = '/var/lib/atd-mikrotik-backup-studio/worker-started-at';
-    if (!is_file($marker)) {
-        @file_put_contents($marker, (string)time(), LOCK_EX);
-        exit(0); // First run establishes a baseline; never bulk-send historical backups.
-    }
-    $startedAt = (int)trim((string)@file_get_contents($marker));
-    if ($startedAt < 1) { fwrite(STDERR, "Invalid worker start marker.\n"); exit(1); }
-    $tg = telegram_settings();
-    if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) {
-        fwrite(STDOUT, "Telegram is not configured; automatic delivery skipped.\n");
-        exit(0);
-    }
-    $base = realpath(BACKUP_DIR);
-    if ($base === false || !is_readable($base)) { fwrite(STDERR, "Backup directory is not readable.\n"); exit(1); }
-    $state = load_state();
-    foreach (glob($base . DIRECTORY_SEPARATOR . '*.backup') ?: [] as $path) {
-        if (!is_file($path) || !is_readable($path)) continue;
-        $name = basename($path);
-        $mtime = @filemtime($path);
-        if ($mtime === false || $mtime < $startedAt) continue;
-        if (!preg_match('/\\A[A-Za-z0-9_. -]+\\.backup\\z/', $name)) {
-            fwrite(STDERR, "Skipped unsupported backup filename: " . $name . "\n");
-            continue;
-        }
-        clearstatcache(true, $path);
-        $hash = @hash_file('sha256', $path);
-        if (!is_string($hash)) continue;
-        $entry = $state[$name] ?? [];
-        if (($entry['sha256'] ?? '') === $hash && ($entry['status'] ?? '') === 'sent') continue;
-        $lastAttempt = strtotime((string)($entry['failed_at'] ?? $entry['attempted_at'] ?? '')) ?: 0;
-        if (($entry['sha256'] ?? '') === $hash && ($entry['status'] ?? '') === 'failed' && $lastAttempt > time() - 900) continue;
-        [$ok, $message] = send_telegram_file($name, false);
-        fwrite($ok ? STDOUT : STDERR, $name . ': ' . $message . "\n");
-        $state = load_state();
-    }
-    exit(0);
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'GET' || (!empty($_SESSION['admin']) && $_SERVER['REQUEST_METHOD'] === 'POST') || (!empty($_POST['login']) && $_SERVER['REQUEST_METHOD'] === 'POST')) {
     render_panel();
     exit;
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit('METHOD_NOT_ALLOWED'); }
+// Called by RouterOS only after a successful SFTP upload. Telegram API access stays server-side.
+// Keep RELAY_TOKEN valid for scripts generated by older versions.
 $provided = $_SERVER['HTTP_X_BACKUP_TOKEN'] ?? '';
-if (!defined('RELAY_TOKEN') || !hash_equals((string)RELAY_TOKEN, $provided)) { http_response_code(403); exit('FORBIDDEN'); }
-$tg = telegram_settings();
-if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) { http_response_code(503); exit('TELEGRAM_NOT_CONFIGURED'); }
+$tokenValid = (defined('TRIGGER_TOKEN') && hash_equals((string)TRIGGER_TOKEN, $provided))
+    || (defined('RELAY_TOKEN') && hash_equals((string)RELAY_TOKEN, $provided));
+if (!$tokenValid) { http_response_code(403); exit('FORBIDDEN'); }
 $input = json_decode(file_get_contents('php://input'), true);
 $name = is_array($input) ? ($input['file'] ?? '') : '';
-if (!is_string($name) || !preg_match('/\A[A-Za-z0-9_.-]+-\d{4}[A-Za-z]{3}\d{2}-\d{6}\.backup\z/', $name)) {
+if (!is_string($name) || basename($name) !== $name || !preg_match('/\\A[A-Za-z0-9_. -]+\\.backup\\z/', $name)) {
     http_response_code(400); exit('INVALID_FILENAME');
 }
-$base = realpath(BACKUP_DIR);
-$path = $base === false ? false : realpath($base . DIRECTORY_SEPARATOR . $name);
-if ($base === false || $path === false || dirname($path) !== $base || !is_file($path) || !is_readable($path)) {
-    http_response_code(404); exit('FILE_NOT_FOUND');
-}
-// Wait until the file size and modification time remain unchanged across consecutive checks.
-$deadline = time() + MAX_WAIT_SECONDS;
-$stable = 0; $lastSize = -1; $lastMtime = -1;
-do {
-    clearstatcache(true, $path);
-    $sizeNow = @filesize($path); $mtimeNow = @filemtime($path);
-    if ($sizeNow === false || $mtimeNow === false || $sizeNow < 1) { $stable = 0; }
-    elseif ($sizeNow === $lastSize && $mtimeNow === $lastMtime) { $stable++; }
-    else { $stable = 0; }
-    $lastSize = $sizeNow === false ? -1 : $sizeNow;
-    $lastMtime = $mtimeNow === false ? -1 : $mtimeNow;
-    if ($stable >= STABILITY_CHECKS) break;
-    sleep(STABILITY_INTERVAL_SECONDS);
-} while (time() < $deadline);
-if ($stable < STABILITY_CHECKS) { http_response_code(425); exit('FILE_NOT_STABLE'); }
-$size = filesize($path);
-if ($size === false || $size < 1 || $size > MAX_FILE_BYTES) { http_response_code(413); exit('FILE_SIZE_REJECTED'); }
-$hash = hash_file('sha256', $path);
-$state = load_state();
-if (isset($state[$name]) && ($state[$name]['sha256'] ?? '') === $hash && ($state[$name]['status'] ?? '') === 'sent') {
-    http_response_code(200); exit('TELEGRAM_OK'); // Idempotent success: never send the same version twice.
-}
-$ch = curl_init('https://api.telegram.org/bot' . $tg['bot_token'] . '/sendDocument');
-curl_setopt_array($ch, [
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => [
-        'chat_id' => $tg['chat_id'],
-        'document' => new CURLFile($path, 'application/octet-stream', $name),
-        'caption' => 'MikroTik backup: ' . $name
-    ],
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_CONNECTTIMEOUT => 15,
-    CURLOPT_TIMEOUT => 180,
-    CURLOPT_SSL_VERIFYPEER => true,
-    CURLOPT_SSL_VERIFYHOST => 2
-]);
-$response = curl_exec($ch);
-$curlError = curl_error($ch);
-$status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
-curl_close($ch);
-$result = is_string($response) ? json_decode($response, true) : null;
+[$ok, $message] = send_telegram_file($name, false);
+if ($ok) { http_response_code(200); exit('TELEGRAM_OK'); }
+$status = match ($message) {
+    'TELEGRAM_NOT_CONFIGURED' => 503,
+    'FILE_NOT_FOUND' => 404,
+    'FILE_NOT_STABLE' => 425,
+    'FILE_SIZE_REJECTED' => 413,
+    'INVALID_FILENAME' => 400,
+    default => 502,
+};
+http_response_code($status);
+exit($message);
 
-if ($curlError === '' && $status >= 200 && $status < 300 &&
-    is_array($result) && ($result['ok'] ?? false) === true) {
-    $state[$name] = ['status'=>'sent','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'sent_at'=>gmdate('c')];
-    if (!save_state($state)) { error_log('Telegram sent but state could not be saved; duplicate protection may be unavailable.'); }
-    http_response_code(200);
-    exit('TELEGRAM_OK');
-}
-$state[$name] = ['status'=>'failed','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'attempted_at'=>gmdate('c'),'http'=>$status];
-save_state($state);
-error_log('MikroTik backup Telegram delivery failed; HTTP=' . $status . '; error=' . $curlError);
-http_response_code(502);
-exit('TELEGRAM_FAILED');
 '@
     # Keep customer-specific values separate from the versioned PHP application code.
     $phpTemplate = $php
@@ -568,6 +496,7 @@ exit('TELEGRAM_FAILED');
 declare(strict_types=1);
 const TELEGRAM_BOT_TOKEN = '';
 const TELEGRAM_CHAT_ID = '';
+const TRIGGER_TOKEN = '$(Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpHost.ToLowerInvariant() + ":" + $sftpUser + ":" + $sftpPass))';
 const PANEL_PASSWORD_SALT = '$passwordSalt';
 const PANEL_PASSWORD_HASH = '$panelPasswordHash';
 const BACKUP_DIR = '$pathPhp';

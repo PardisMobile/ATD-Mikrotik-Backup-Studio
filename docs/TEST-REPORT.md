@@ -5,7 +5,7 @@ Last reviewed: 2026-10-25.
 ## Repository-level implementation review
 - The Windows generator creates a customer-specific `install.sh` in Telegram/Panel mode. It embeds the first-run config payload and SHA-256 hashes for matching PHP/CSS/JS application assets.
 - The generated installer downloads panel assets from GitHub and verifies hashes before installation; separate panel asset transfers are not required.
-- Newly generated RouterOS scripts no longer make HTTP relay calls for Telegram. An isolated server-side PHP scanner scans only backup files newer than its first-run baseline, checks file stability, sends them to Telegram, records hashes to avoid duplicates, and backs off failed attempts for 15 minutes. The old authenticated relay endpoint remains only for backward compatibility.
+- Newly generated RouterOS scripts call the authenticated panel endpoint only after a successful SFTP upload; they never call Telegram directly. PHP checks file-size stability across two intervals, sends the file to Telegram, records its SHA-256 to avoid duplicate delivery, and accepts legacy `RELAY_TOKEN` configurations. Installer/updater cleanup removes legacy worker/scanner units and timers.
 - The runtime installer reads the selected public port from the generated configuration, checks for conflicts on a clean install, preserves the installed port on re-runs, and aborts if a new package expects a different port.
 - PHP sessions use an ATD-owned writable directory, and panel session cookies are explicitly marked Secure because TLS terminates at the local socat proxy.
 - The original RouterOS identity-based backup filename behavior is preserved; the scanner skips unsupported filenames rather than modifying the SFTP core.
@@ -22,7 +22,7 @@ Last reviewed: 2026-10-25.
 - Re-running the installer and verifying every config value, assigned port, state entry, and backup file remains unchanged.
 - Updating PHP/CSS/JS from GitHub and validating rollback after a deliberately invalid staged file.
 - A real MikroTik RouterOS 7 scheduled backup and SFTP transfer.
-- Actual Telegram bot delivery, duplicate-send behavior, server-side scanner timer execution, and panel password-change flow.
+- Actual Telegram bot delivery, duplicate-send behavior, the post-SFTP panel callback, actual Telegram delivery, duplicate-send behavior, and panel password-change flow.
 - Certificate trust behavior for RouterOS and browser access on a public server with the intended domain/certificate.
 - Compatibility with all Linux distributions and existing host firewall/provider policies.
 

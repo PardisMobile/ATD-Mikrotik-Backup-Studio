@@ -50,10 +50,15 @@ mkdir -p "$APP" "$STATE/sessions" "$TLS" "$BACKUP_DIR"
 chmod 0750 "$APP"
 chmod 0700 "$STATE" "$STATE/sessions"
 chown -R atdbackup:atdbackup "$STATE"
-# Establish a first-run baseline so historic files are not bulk-sent to Telegram.
-if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then date +%s > "$STATE/telegram-scan-started-at"; fi
-chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
-chmod 0600 "$STATE/telegram-scan-started-at"
+# Remove legacy automatic scanners/workers from older installations.
+LEGACY_UNITS=(
+  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
+  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
+  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
+  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
+)
+for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
+rm -f "$STATE/telegram-scan-started-at" "$STATE/worker-started-at" "$STATE/scanner-started-at"
 chown root:atdbackup "$TLS"
 chmod 0750 "$TLS"
 # Keep configuration and delivery state outside the versioned application directory.
@@ -65,6 +70,13 @@ else
 fi
 php -l "$TLS/config.php" >/dev/null || { echo 'Private configuration syntax check failed.' >&2; exit 8; }
 grep -q "const BACKUP_DIR" "$TLS/config.php" || { echo 'Private configuration is missing BACKUP_DIR.' >&2; exit 8; }
+# Add the callback token to existing installations without overwriting other private settings.
+if ! grep -q "const TRIGGER_TOKEN" "$TLS/config.php"; then
+  TRIGGER_TOKEN=$(php -r 'require $argv[1]; echo defined("TRIGGER_TOKEN") ? TRIGGER_TOKEN : "";' "$SRC/config.php")
+  [[ "$TRIGGER_TOKEN" =~ ^[a-f0-9]{64}$ ]] || { echo 'Generated configuration lacks a valid trigger token.' >&2; exit 8; }
+  printf "\nconst TRIGGER_TOKEN = '%s';\n" "$TRIGGER_TOKEN" >> "$TLS/config.php"
+  chown root:atdbackup "$TLS/config.php"; chmod 0640 "$TLS/config.php"
+fi
 
 for f in send-backup.php panel.css panel.js; do
   if [[ -e "$APP/$f" ]]; then cp -p "$APP/$f" "$APP/$f.backup.$(date +%Y%m%d%H%M%S)"; fi
@@ -155,35 +167,8 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 EOF
-cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service <<EOF
-[Unit]
-Description=ATD MikroTik Backup Studio Telegram backup scan
-After=network-online.target atd-mikrotik-backup-php.service
-Wants=network-online.target
-[Service]
-Type=oneshot
-User=atdbackup
-Group=atdbackup
-WorkingDirectory=/opt/atd-mikrotik-backup-studio
-ExecStart=/usr/bin/php -d expose_php=0 /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups
-ProtectSystem=strict
-PrivateTmp=true
-NoNewPrivileges=true
-ReadWritePaths=/var/lib/atd-mikrotik-backup-studio $BACKUP_DIR
-EOF
-cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer <<'EOF'
-[Unit]
-Description=Scan new ATD MikroTik backups for Telegram delivery
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=1min
-Persistent=true
-Unit=atd-mikrotik-backup-telegram-scan.service
-[Install]
-WantedBy=timers.target
-EOF
 systemctl daemon-reload
-systemctl enable atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service atd-mikrotik-backup-telegram-scan.timer
+systemctl enable atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
 if systemctl is-active --quiet atd-mikrotik-backup-php.service 2>/dev/null; then
   systemctl restart atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
 else
@@ -191,7 +176,6 @@ else
 fi
 systemctl is-active --quiet atd-mikrotik-backup-php.service
 systemctl is-active --quiet atd-mikrotik-backup-tls.service
-systemctl start atd-mikrotik-backup-telegram-scan.timer
 
 # Install the ATD-only updater. It never changes the saved customer configuration or backup state.
 UPDATE_TMP=$(mktemp)

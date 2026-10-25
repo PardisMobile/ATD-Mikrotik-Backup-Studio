@@ -1,6 +1,6 @@
 # ATD MikroTik Backup Studio
 
-ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, uploads them over SFTP, and optionally sends them to Telegram using an isolated server-side scanner and a password-protected panel. New RouterOS scripts use SFTP only; Telegram failures cannot affect backup creation, SFTP, or the Keep/Delete local-file choice.
+ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, uploads them over SFTP, and optionally sends them to Telegram through an authenticated post-SFTP request to the password-protected panel, which checks file-size stability and sends the file server-side. New RouterOS scripts use SFTP only; Telegram failures cannot affect backup creation, SFTP, or the Keep/Delete local-file choice.
 
 ## Panel features
 - Lists uploaded `.backup` files from the configured Linux backup directory.
@@ -44,7 +44,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 - Confirm the server-side scanner timer sends a newly uploaded backup to Telegram and the panel's delivery status updates. This may take up to about a minute after SFTP completes.
 - In the panel, test manual send/retry on a test file.
 - Test deletion only with a disposable test backup and confirm the selected file disappears.
-- If a file does not appear, check the RouterOS log, SFTP path/permissions, and the ATD services on Linux before changing any existing SFTP configuration.
+- If a file does not appear, check the RouterOS log, SFTP path/permissions, the ATD PHP/TLS services, and the panel callback response before changing any existing SFTP configuration.
 
 ### 5. If the directory must be created separately
 The generator also creates `create-sftp-directory.txt`, containing a command for the selected directory. On the Linux server, an administrator can run that command (prefix it with `sudo` if required by the current shell user). In panel mode, the installer already creates the directory automatically, so this file is mainly a convenience for SFTP-only use or manual setup.

@@ -8,8 +8,16 @@ STATE=/var/lib/atd-mikrotik-backup-studio
 BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
 for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installation not found ($path)." >&2; exit 3; }; done
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
-# Add the worker baseline only if this older installation does not already have one.
-if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then date +%s > "$STATE/telegram-scan-started-at"; chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"; chmod 0600 "$STATE/telegram-scan-started-at"; fi
+# Remove legacy automatic scanners/workers; the new flow is triggered by the post-SFTP callback.
+LEGACY_UNITS=(
+  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
+  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
+  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
+  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
+)
+for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
+rm -f "$STATE/telegram-scan-started-at" "$STATE/worker-started-at" "$STATE/scanner-started-at"
+systemctl daemon-reload
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI is required; no packages were installed.' >&2; exit 4; }
 
@@ -36,8 +44,10 @@ for f in send-backup.php panel.css panel.js; do
 done
 rollback(){
   echo 'Update failed; restoring previous ATD application files.' >&2
-  systemctl stop atd-mikrotik-backup-telegram-scan.timer 2>/dev/null || true
-  rm -f /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer
+  for unit in atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer; do
+    systemctl disable --now "$unit" 2>/dev/null || true
+    rm -f "/etc/systemd/system/$unit"
+  done
   systemctl daemon-reload 2>/dev/null || true
   for f in send-backup.php panel.css panel.js; do
     if [[ -f "$BACKUP/$f" ]]; then cp -p "$BACKUP/$f" "$APP/$f"
@@ -57,40 +67,11 @@ mv -f "$APP/panel.js.new" "$APP/panel.js"
 chown root:atdbackup "$APP/send-backup.php"
 chmod 0640 "$APP/send-backup.php"
 chmod 0644 "$APP/panel.css" "$APP/panel.js"
-cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service <<EOF
-[Unit]
-Description=ATD MikroTik Backup Studio Telegram backup scan
-After=network-online.target atd-mikrotik-backup-php.service
-Wants=network-online.target
-[Service]
-Type=oneshot
-User=atdbackup
-Group=atdbackup
-WorkingDirectory=$APP
-ExecStart=/usr/bin/php -d expose_php=0 $APP/send-backup.php --scan-backups
-ProtectSystem=strict
-PrivateTmp=true
-NoNewPrivileges=true
-ReadWritePaths=$STATE $(php -r 'require $argv[1]; echo BACKUP_DIR;' "$TLS/config.php")
-EOF
-cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer <<'EOF'
-[Unit]
-Description=Scan new ATD MikroTik backups for Telegram delivery
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=1min
-Persistent=true
-Unit=atd-mikrotik-backup-telegram-scan.service
-[Install]
-WantedBy=timers.target
-EOF
 systemctl daemon-reload
-systemctl enable atd-mikrotik-backup-telegram-scan.timer
 if ! php -l "$APP/send-backup.php" >/dev/null || ! systemctl restart atd-mikrotik-backup-php.service || ! systemctl is-active --quiet atd-mikrotik-backup-php.service; then
   rollback
   exit 7
 fi
-systemctl start atd-mikrotik-backup-telegram-scan.timer
 echo "ATD application updated successfully."
 echo "Private configuration preserved: $TLS/config.php"
 echo "Delivery state and backups preserved: $STATE and configured backup directory."
