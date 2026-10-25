@@ -193,14 +193,14 @@ if (PHP_SAPI === 'cli' && in_array('--worker', $argv ?? [], true)) {
         exit(0); // First run establishes a baseline; never bulk-send historical backups.
     }
     $startedAt = (int)trim((string)@file_get_contents($marker));
-    if ($startedAt < 1) { fwrite(STDERR, "Invalid worker start marker.\\n"); exit(1); }
+    if ($startedAt < 1) { fwrite(STDERR, "Invalid worker start marker.\n"); exit(1); }
     $tg = telegram_settings();
     if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) {
-        fwrite(STDOUT, "Telegram is not configured; automatic delivery skipped.\\n");
+        fwrite(STDOUT, "Telegram is not configured; automatic delivery skipped.\n");
         exit(0);
     }
     $base = realpath(BACKUP_DIR);
-    if ($base === false || !is_readable($base)) { fwrite(STDERR, "Backup directory is not readable.\\n"); exit(1); }
+    if ($base === false || !is_readable($base)) { fwrite(STDERR, "Backup directory is not readable.\n"); exit(1); }
     $state = load_state();
     foreach (glob($base . DIRECTORY_SEPARATOR . '*.backup') ?: [] as $path) {
         if (!is_file($path) || !is_readable($path)) continue;
@@ -208,7 +208,7 @@ if (PHP_SAPI === 'cli' && in_array('--worker', $argv ?? [], true)) {
         $mtime = @filemtime($path);
         if ($mtime === false || $mtime < $startedAt) continue;
         if (!preg_match('/\\A[A-Za-z0-9_. -]+\\.backup\\z/', $name)) {
-            fwrite(STDERR, "Skipped unsupported backup filename: " . $name . "\\n");
+            fwrite(STDERR, "Skipped unsupported backup filename: " . $name . "\n");
             continue;
         }
         clearstatcache(true, $path);
@@ -219,7 +219,7 @@ if (PHP_SAPI === 'cli' && in_array('--worker', $argv ?? [], true)) {
         $lastAttempt = strtotime((string)($entry['failed_at'] ?? $entry['attempted_at'] ?? '')) ?: 0;
         if (($entry['sha256'] ?? '') === $hash && ($entry['status'] ?? '') === 'failed' && $lastAttempt > time() - 900) continue;
         [$ok, $message] = send_telegram_file($name, false);
-        fwrite($ok ? STDOUT : STDERR, $name . ': ' . $message . "\\n");
+        fwrite($ok ? STDOUT : STDERR, $name . ': ' . $message . "\n");
         $state = load_state();
     }
     exit(0);
