@@ -1,22 +1,7 @@
-# Test Report
+# Validation report
 
-## Scope
+The supplied v3 ZIP reports PHP template syntax checks, local panel smoke tests, and `bash -n` validation of the generated installer.
 
-This report separates source-level checks from end-to-end validation. It must be updated with actual environment details and results before tagging a stable release.
+Not independently verified in this environment: PowerShell runtime or EXE build, live RouterOS backup and SFTP transfer, live Telegram delivery, production HTTPS/PHP-FPM deployment, or end-to-end local-backup deletion.
 
-## Current verification status
-
-- PHP syntax check: previously reported successful for a generated PHP template; this does not verify the complete deployed application.
-- PowerShell execution: not yet verified in a Windows environment in this workflow.
-- EXE build: not yet verified.
-- RouterOS 7 backup creation and SFTP upload: must be verified on the target router.
-- File stability / complete-upload detection: must be verified with slow and interrupted uploads.
-- Telegram Bot API delivery: not yet verified against the actual bot and chat.
-- Duplicate suppression after retry/restart: must be verified.
-- Panel authentication, CSRF protection, delete/retry/password change: must be tested in a real PHP web-server context.
-- Server installer compatibility with the actual Nginx/Apache/PHP-FPM configuration: not yet verified.
-- Mobile/tablet/desktop visual QA and Persian/English layout: must be tested in browsers.
-
-## Release gate
-
-Do not mark a release production-ready until the Windows client, RouterOS upload, relay, panel, permission model, and installer pass end-to-end tests. Keep test credentials and router backups out of the repository.
+The GitHub-based installer flow is not implemented/verified yet. The supplied package instructions still ask the user to upload generated files manually. The repository is not production-ready until the original client source is synchronized and the complete install flow passes end-to-end testing.
