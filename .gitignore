@@ -12,6 +12,8 @@ server-config.php
 *.backup
 *.rsc
 *.zip
+# Generated customer package contains secrets (especially install.sh)
+windows-client/generated-output/
 # Build output
 windows-client/bin/
 windows-client/obj/
