@@ -150,6 +150,7 @@ jobs:
         run: |
           bash -n server-deployment/install-standalone.sh
           bash -n server-deployment/update-standalone.sh
+          bash -n server-deployment/uninstall-standalone.sh
 
   powershell-parse:
     runs-on: windows-latest
