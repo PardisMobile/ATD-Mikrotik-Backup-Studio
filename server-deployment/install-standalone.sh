@@ -46,7 +46,6 @@ ExecStart=/usr/bin/php -d session.cookie_secure=1 -d expose_php=0 -S 127.0.0.1:$
 Restart=on-failure
 RestartSec=3
 ProtectSystem=strict
-ProtectHome=read-only
 PrivateTmp=true
 NoNewPrivileges=true
 ReadWritePaths=/var/lib/atd-mikrotik-backup-studio $BACKUP_DIR
