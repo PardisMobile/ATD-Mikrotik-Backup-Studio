@@ -1,0 +1,22 @@
+# Local configuration and secrets
+.env
+*.local
+config.local.*
+telegram-secrets.php
+server-config.php
+*.pem
+*.key
+*.p12
+*.pfx
+# Generated backup artifacts
+*.backup
+*.rsc
+*.zip
+# Build output
+windows-client/bin/
+windows-client/obj/
+release/
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
