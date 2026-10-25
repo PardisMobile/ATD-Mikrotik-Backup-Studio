@@ -217,7 +217,7 @@ $routerScript = @"
 :local safeName ""
 :for i from=0 to=([:len `$routerName] - 1) do={
     :local ch [:pick `$routerName `$i (`$i + 1)]
-    :if (`$ch ~ "[^A-Za-z0-9_.-]") do={ :set safeName (`$safeName . "_") } else={ :set safeName (`$safeName . `$ch) }
+    :if (`$ch = " ") do={ :set safeName (`$safeName . "_") } else={ :set safeName (`$safeName . `$ch) }
 }
 :if ([:len `$safeName] = 0) do={ :set safeName "mikrotik" }
 :local d [/system clock get date]
