@@ -212,11 +212,11 @@ $routerScript = @"
 :local remoteDir "$dirEsc"
 
 :local routerName [/system identity get name]
-# Make Identity safe for filenames: spaces become underscores.
+# Restrict Identity to the filename characters accepted by the relay; replace all others with underscores.
 :local safeName ""
 :for i from=0 to=([:len `$routerName] - 1) do={
     :local ch [:pick `$routerName `$i (`$i + 1)]
-    :if (`$ch = " ") do={ :set safeName (`$safeName . "_") } else={ :set safeName (`$safeName . `$ch) }
+    :if (`$ch ~ "[^A-Za-z0-9_.-]") do={ :set safeName (`$safeName . "_") } else={ :set safeName (`$safeName . `$ch) }
 }
 :if ([:len `$safeName] = 0) do={ :set safeName "mikrotik" }
 :local d [/system clock get date]
@@ -309,7 +309,7 @@ session_name_guard();
 
 function session_name_guard(): void {
     ini_set('session.use_strict_mode', '1');
-    session_set_cookie_params(['httponly'=>true, 'secure'=>(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'), 'samesite'=>'Strict']);
+    session_set_cookie_params(['httponly'=>true, 'secure'=>true, 'samesite'=>'Strict']);
     session_start();
 }
 function load_state(): array {
