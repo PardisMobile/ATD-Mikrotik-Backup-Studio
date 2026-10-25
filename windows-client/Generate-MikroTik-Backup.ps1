@@ -548,7 +548,6 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
   if(search)search.addEventListener('input',function(){const q=this.value.trim().toLocaleLowerCase();document.querySelectorAll('#backupTable tbody tr[data-search]').forEach(function(row){row.hidden=!row.dataset.search.toLocaleLowerCase().includes(q)})});
 })();
 '@
-}
 
     $cssHash = Get-Sha256Text $css
     $jsHash = Get-Sha256Text $js
