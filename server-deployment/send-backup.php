@@ -9,7 +9,7 @@ session_name_guard();
 
 function session_name_guard(): void {
     ini_set('session.use_strict_mode', '1');
-    session_set_cookie_params(['httponly'=>true, 'secure'=>(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'), 'samesite'=>'Strict']);
+    session_set_cookie_params(['httponly'=>true, 'secure'=>true, 'samesite'=>'Strict']);
     session_start();
 }
 function load_state(): array {
