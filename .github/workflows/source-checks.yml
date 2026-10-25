@@ -27,6 +27,23 @@ jobs:
           PY
           php -l server-deployment/send-backup.php
           php -l /tmp/atd-generated-panel-lint.php
+      - name: Check JavaScript and CSS syntax
+        run: |
+          node --check server-deployment/panel.js
+          python3 -m pip install --quiet tinycss2
+          python3 - <<'PY'
+          from pathlib import Path
+          import tinycss2
+          path = Path("server-deployment/panel.css")
+          css = path.read_text(encoding="utf-8")
+          rules = tinycss2.parse_stylesheet(css, skip_comments=True, skip_whitespace=True)
+          errors = [item for item in rules if item.type == "error"]
+          if errors:
+              for error in errors:
+                  print(f"{path}:{error.source_line}:{error.source_column}: {error.message}")
+              raise SystemExit(1)
+          print("JavaScript syntax and CSS stylesheet parsing passed.")
+          PY
       - name: Verify canonical assets and generated bootstrap
         run: |
           python3 - <<'PY'
