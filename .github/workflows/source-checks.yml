@@ -71,7 +71,15 @@ jobs:
               raise SystemExit("PHP session path must be writable under the service sandbox")
           if 'echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"' not in runtime:
               raise SystemExit("Installer must print the actual panel endpoint")
-          print("Canonical assets match; bootstrap syntax and panel URL/session invariants are valid.")
+          config = Path("/tmp/atd-test-config.php")
+          config.write_text("<?php\\nconst PUBLIC_PORT = 24443;\\n", encoding="utf-8")
+          port = subprocess.check_output(
+              ["php", "-r", "require $argv[1]; echo PUBLIC_PORT;", str(config)],
+              text=True
+          ).strip()
+          if port != "24443":
+              raise SystemExit(f"PHP public-port extraction failed: {port!r}")
+          print("Canonical assets match; bootstrap syntax, port extraction, URL and session invariants are valid.")
           PY
   shell-check:
     runs-on: ubuntu-latest
