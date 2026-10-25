@@ -186,8 +186,8 @@ function format_bytes(int $bytes): string {
     return number_format($value, $value<10?1:0).' '.$units[$i];
 }
 
-if (PHP_SAPI === 'cli' && in_array('--worker', $argv ?? [], true)) {
-    $marker = '/var/lib/atd-mikrotik-backup-studio/worker-started-at';
+if (PHP_SAPI === 'cli' && in_array('--scan-backups', $argv ?? [], true)) {
+    $marker = '/var/lib/atd-mikrotik-backup-studio/telegram-scan-started-at';
     if (!is_file($marker)) {
         @file_put_contents($marker, (string)time(), LOCK_EX);
         exit(0); // First run establishes a baseline; never bulk-send historical backups.
