@@ -353,6 +353,44 @@ function send_telegram_file(string $name, bool $force = false): array {
     $state[$name]=['status'=>'failed','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'failed_at'=>gmdate('c'),'error'=>$curlError!==''?$curlError:('Telegram HTTP '.$http)]; save_state($state);
     return [false,'TELEGRAM_SEND_FAILED'];
 }
+function delivery_schedule_settings(): array {
+    $state = load_state();
+    $saved = $state['_delivery_schedule'] ?? [];
+    if (is_array($saved) && isset($saved['backup_times']) && is_array($saved['backup_times'])) $times = array_values(array_map('strval', $saved['backup_times']));
+    elseif (defined('BACKUP_SCHEDULE_TIMES') && is_array(BACKUP_SCHEDULE_TIMES)) $times = array_values(array_map('strval', BACKUP_SCHEDULE_TIMES));
+    else $times = [];
+    $delay = is_array($saved) && isset($saved['delay_minutes']) ? (int)$saved['delay_minutes'] : (defined('TELEGRAM_DELAY_MINUTES') ? (int)TELEGRAM_DELAY_MINUTES : 2);
+    return ['backup_times'=>$times, 'delay_minutes'=>max(0, min(30, $delay))];
+}
+function normalize_backup_times(string $input): ?array {
+    $input = trim($input);
+    if ($input === '') return null;
+    $parts = preg_split('/\s*,\s*/', $input);
+    if (!is_array($parts) || count($parts) < 1 || count($parts) > 2) return null;
+    $times = [];
+    foreach ($parts as $part) {
+        if (!preg_match('/\A([01][0-9]|2[0-3]):([0-5][0-9])\z/', $part)) return null;
+        $time = $part . ':00';
+        if (in_array($time, $times, true)) return null;
+        $times[] = $time;
+    }
+    return $times;
+}
+function apply_delivery_cron(): bool {
+    if (!function_exists('exec')) return false;
+    $output = []; $code = 1;
+    @exec('sudo -n /usr/local/sbin/atd-mikrotik-backup-cron --apply 2>&1', $output, $code);
+    return $code === 0;
+}
+function latest_backup_name(): ?string {
+    $base = realpath(BACKUP_DIR);
+    if ($base === false || !is_readable($base)) return null;
+    $files = [];
+    foreach (glob($base . DIRECTORY_SEPARATOR . '*.backup') ?: [] as $path) if (is_file($path) && is_readable($path)) $files[] = $path;
+    if (!$files) return null;
+    usort($files, static fn($a, $b) => filemtime($b) <=> filemtime($a));
+    return basename($files[0]);
+}
 function esc(string $s): string { return htmlspecialchars($s, ENT_QUOTES|ENT_SUBSTITUTE, 'UTF-8'); }
 function render_panel(): void {
     header('Content-Type: text/html; charset=utf-8');
@@ -367,8 +405,7 @@ function render_panel(): void {
     if ($_SERVER['REQUEST_METHOD'] === 'POST' && empty($_POST['login']) && empty($_POST['logout'])) {
         if (!check_csrf()) { http_response_code(403); exit('Invalid session token. Refresh the page and retry.'); }
         $action=(string)($_POST['action']??''); $name=(string)($_POST['file']??'');
-        if ($action==='send') { [$ok,$message]=send_telegram_file($name, true); $_SESSION['flash']=['ok'=>$ok,'message'=>$message]; }
-        elseif ($action==='delete') {
+        if ($action==='delete') {
             $base=realpath(BACKUP_DIR); $path=($base!==false && basename($name)===$name && preg_match('/\A[A-Za-z0-9_. -]+\.backup\z/',$name))?realpath($base.DIRECTORY_SEPARATOR.$name):false;
             if ($path!==false && dirname($path)===$base && is_file($path) && @unlink($path)) { $st=load_state(); unset($st[$name]); save_state($st); $_SESSION['flash']=['ok'=>true,'message'=>'DELETED']; }
             else $_SESSION['flash']=['ok'=>false,'message'=>'DELETE_FAILED'];
@@ -392,10 +429,31 @@ function render_panel(): void {
             }
         } elseif ($action==='telegram_test') {
             $tg=telegram_settings();
-            if (!valid_telegram_settings($tg['bot_token'],$tg['chat_id'])) $_SESSION['flash']=['ok'=>false,'message'=>'TELEGRAM_NOT_CONFIGURED'];
-            else {
-                $test=telegram_api($tg['bot_token'],'sendMessage',['chat_id'=>$tg['chat_id'],'text'=>'ATD MikroTik Backup Studio: Telegram connection test successful.']);
-                $_SESSION['flash']=$test['ok']?['ok'=>true,'message'=>'TELEGRAM_TEST_OK']:['ok'=>false,'message'=>'TELEGRAM_TEST_FAILED'];
+            if (!valid_telegram_settings($tg['bot_token'],$tg['chat_id'])) {
+                $_SESSION['flash']=['ok'=>false,'message'=>'TELEGRAM_NOT_CONFIGURED'];
+            } else {
+                $latest=latest_backup_name();
+                if ($latest===null) $_SESSION['flash']=['ok'=>false,'message'=>'NO_BACKUP_FILES'];
+                else {
+                    [$ok,$message]=send_telegram_file($latest, true);
+                    $_SESSION['flash']=['ok'=>$ok,'message'=>($ok?'TELEGRAM_TEST_OK: ':'TELEGRAM_TEST_FAILED: ').$latest.($ok?'':' ('.$message.')')];
+                }
+            }
+        } elseif ($action==='delivery_schedule') {
+            $times=normalize_backup_times((string)($_POST['backup_times']??''));
+            $delayRaw=(string)($_POST['delay_minutes']??'2');
+            if ($times===null || !preg_match('/\A(?:[0-9]|[12][0-9]|30)\z/',$delayRaw)) {
+                $_SESSION['flash']=['ok'=>false,'message'=>'DELIVERY_SCHEDULE_INVALID'];
+            } else {
+                $oldState=load_state(); $oldSchedule=$oldState['_delivery_schedule']??null;
+                $oldState['_delivery_schedule']=['backup_times'=>$times,'delay_minutes'=>(int)$delayRaw,'updated_at'=>gmdate('c')];
+                if (!save_state($oldState)) $_SESSION['flash']=['ok'=>false,'message'=>'STATE_SAVE_FAILED'];
+                elseif (!apply_delivery_cron()) {
+                    $restored=load_state();
+                    if ($oldSchedule===null) unset($restored['_delivery_schedule']); else $restored['_delivery_schedule']=$oldSchedule;
+                    save_state($restored); apply_delivery_cron();
+                    $_SESSION['flash']=['ok'=>false,'message'=>'CRON_UPDATE_FAILED'];
+                } else $_SESSION['flash']=['ok'=>true,'message'=>'DELIVERY_SCHEDULE_SAVED'];
             }
         }
         header('Location: '.$_SERVER['PHP_SELF']); exit;
@@ -408,7 +466,7 @@ function render_panel(): void {
     $totalBytes=0; foreach($files as $f) { $totalBytes += (int)filesize($f); }
     $sentCount=0; $failedCount=0; foreach($files as $f) { $st=$state[basename($f)]['status']??''; if($st==='sent')$sentCount++; elseif($st==='failed')$failedCount++; }
     $lang = (($_COOKIE['atd_lang'] ?? 'fa') === 'en') ? 'en' : 'fa'; $isEn = $lang==='en';
-    $t = $isEn ? ['title'=>'Backup management','subtitle'=>'Your MikroTik backup files, in one place.','files'=>'Backup files','sent'=>'Sent to Telegram','failed'=>'Failed delivery','storage'=>'Total storage','search'=>'Search backups…','name'=>'File name','size'=>'Size','date'=>'Modified','status'=>'Telegram status','actions'=>'Actions','sent_status'=>'Sent','failed_status'=>'Failed','pending'=>'Not sent','empty'=>'No .backup files found in this directory.','path'=>'Backup directory','logout'=>'Sign out','refresh'=>'Refresh','delete'=>'Delete','send'=>'Send / retry','confirm'=>'Are you sure you want to delete this backup?','language'=>'فارسی','theme'=>'Toggle theme','settings'=>'Panel','password'=>'Change password','old'=>'Current password','new'=>'New password (12+ characters)','save'=>'Update password','cancel'=>'Cancel','login'=>'Sign in','welcome'=>'Welcome back','secure'=>'Secure backup workspace','bytes'=>'bytes'] : ['title'=>'مدیریت بکاپ‌ها','subtitle'=>'فایل‌های بکاپ میکروتیک، یک‌جا و مرتب.','files'=>'تعداد بکاپ‌ها','sent'=>'ارسال‌شده به تلگرام','failed'=>'ارسال ناموفق','storage'=>'حجم کل فایل‌ها','search'=>'جست‌وجوی بکاپ…','name'=>'نام فایل','size'=>'حجم','date'=>'آخرین تغییر','status'=>'وضعیت تلگرام','actions'=>'عملیات','sent_status'=>'ارسال‌شده','failed_status'=>'ناموفق','pending'=>'ارسال‌نشده','empty'=>'فایلی با پسوند .backup در این مسیر پیدا نشد.','path'=>'مسیر بکاپ','logout'=>'خروج','refresh'=>'تازه‌سازی','delete'=>'حذف','send'=>'ارسال / تلاش مجدد','confirm'=>'از حذف این فایل بکاپ مطمئن هستید؟','language'=>'English','theme'=>'تغییر تم','settings'=>'پنل','password'=>'تغییر رمز عبور','old'=>'رمز فعلی','new'=>'رمز جدید (حداقل ۱۲ کاراکتر)','save'=>'ذخیره رمز','cancel'=>'انصراف','login'=>'ورود','welcome'=>'خوش آمدید','secure'=>'محیط امن مدیریت بکاپ','bytes'=>'بایت'];
+    $t = $isEn ? ['title'=>'Backup management','subtitle'=>'Your MikroTik backup files, in one place.','files'=>'Backup files','sent'=>'Sent to Telegram','failed'=>'Failed delivery','storage'=>'Total storage','search'=>'Search backups…','name'=>'File name','size'=>'Size','date'=>'Modified','status'=>'Telegram status','actions'=>'Delete','sent_status'=>'Sent','failed_status'=>'Failed','pending'=>'Not sent','empty'=>'No .backup files found in this directory.','path'=>'Backup directory','logout'=>'Sign out','refresh'=>'Refresh','delete'=>'Delete','confirm'=>'Are you sure you want to delete this backup?','language'=>'فارسی','theme'=>'Toggle theme','settings'=>'Panel','password'=>'Change password','old'=>'Current password','new'=>'New password (12+ characters)','save'=>'Update password','cancel'=>'Cancel','login'=>'Sign in','welcome'=>'Welcome back','secure'=>'Secure backup workspace','bytes'=>'bytes'] : ['title'=>'مدیریت بکاپ‌ها','subtitle'=>'فایل‌های بکاپ میکروتیک، یک‌جا و مرتب.','files'=>'تعداد بکاپ‌ها','sent'=>'ارسال‌شده به تلگرام','failed'=>'ارسال ناموفق','storage'=>'حجم کل فایل‌ها','search'=>'جست‌وجوی بکاپ…','name'=>'نام فایل','size'=>'حجم','date'=>'آخرین تغییر','status'=>'وضعیت تلگرام','actions'=>'حذف','sent_status'=>'ارسال‌شده','failed_status'=>'ناموفق','pending'=>'ارسال‌نشده','empty'=>'فایلی با پسوند .backup در این مسیر پیدا نشد.','path'=>'مسیر بکاپ','logout'=>'خروج','refresh'=>'تازه‌سازی','delete'=>'حذف',undefined'confirm'=>'از حذف این فایل بکاپ مطمئن هستید؟','language'=>'English','theme'=>'تغییر تم','settings'=>'پنل','password'=>'تغییر رمز عبور','old'=>'رمز فعلی','new'=>'رمز جدید (حداقل ۱۲ کاراکتر)','save'=>'ذخیره رمز','cancel'=>'انصراف','login'=>'ورود','welcome'=>'خوش آمدید','secure'=>'محیط امن مدیریت بکاپ','bytes'=>'بایت'];
     echo '<!doctype html><html lang="'.($isEn?'en':'fa').'" dir="'.($isEn?'ltr':'rtl').'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>ATD · '.esc($t['title']).'</title><link rel="stylesheet" href="panel.css"></head><body><div class="app-shell"><aside class="sidebar"><a class="brand" href="'.esc($_SERVER['PHP_SELF']).'"><span class="brand-mark">'.icon_svg('router').'</span><span><strong>ATD</strong><small>MIKROTIK BACKUP STUDIO</small></span></a><div class="side-label">'.esc($t['settings']).'</div><div class="side-active">'.icon_svg('layout').'<span>'.esc($t['title']).'</span></div><div class="sidebar-bottom"><span class="online-dot"></span><span>RouterOS 7 · '.($isEn?'Protected':'محافظت‌شده').'</span></div></aside><main class="main-content"><header class="topbar"><div class="topbar-heading"><div class="breadcrumb">ATD <span>/</span> '.esc($t['title']).'</div><h1>'.esc($t['title']).'</h1><p>'.esc($t['subtitle']).'</p></div><div class="top-actions"><button class="icon-btn" type="button" id="themeToggle" aria-label="'.esc($t['theme']).'">'.icon_svg('moon').'</button><div class="theme-colors" aria-label="Accent color"><button class="color-swatch" style="background:#1769e0" data-accent="#1769e0" aria-label="Blue"></button><button class="color-swatch" style="background:#0d9488" data-accent="#0d9488" aria-label="Teal"></button><button class="color-swatch" style="background:#7c3aed" data-accent="#7c3aed" aria-label="Violet"></button><button class="color-swatch" style="background:#db2777" data-accent="#db2777" aria-label="Rose"></button><button class="color-swatch" style="background:#ea580c" data-accent="#ea580c" aria-label="Orange"></button></div><button class="language-btn" type="button" id="languageToggle">'.esc($t['language']).'</button><form method="post"><button class="btn btn-ghost" name="logout" value="1">'.icon_svg('logout').'<span>'.esc($t['logout']).'</span></button></form></div></header>';
     if (is_array($flash)) echo '<div class="alert '.(!empty($flash['ok'])?'alert-success':'alert-error').'">'.esc((string)($flash['message']??'')).'</div>';
     echo '<section class="welcome-strip"><div class="welcome-copy"><span class="eyebrow">ATD BACKUP CENTER</span><h2>'.esc($t['welcome']).' 👋</h2><p>'.esc($t['secure']).'</p></div><div class="welcome-art" aria-hidden="true">'.icon_svg('cloud').'</div></section>';
@@ -416,9 +474,12 @@ function render_panel(): void {
     echo '<section class="files-panel password-panel"><div class="panel-heading"><div><h2>'.icon_svg('shield').' '.esc($t['password']).'</h2><p>'.($isEn?'Use a strong password with at least 12 characters.':'برای امنیت بیشتر، رمز قوی با حداقل ۱۲ نویسه انتخاب کنید.').'</p></div></div><form method="post" class="password-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="password"><label>'.esc($t['old']).'<input type="password" name="old_password" required autocomplete="current-password"></label><label>'.esc($t['new']).'<input type="password" name="new_password" minlength="12" required autocomplete="new-password"></label><button class="btn btn-primary" type="submit">'.esc($t['save']).'</button></form></section>';
     $tg=telegram_settings(); $tgConfigured=valid_telegram_settings($tg['bot_token'],$tg['chat_id']);
     $tgChatDisplay=$tg['chat_id'];
-    echo '<section class="files-panel telegram-panel"><div class="panel-heading"><div><h2>'.icon_svg('send').' '.esc($isEn?'Telegram delivery settings':'تنظیمات اتصال تلگرام').'</h2><p>'.esc($isEn?'Configure or replace your bot credentials here; the generator no longer asks for them.':'توکن ربات و چت مقصد را اینجا وارد یا هر زمان لازم شد تغییر دهید؛ جنراتور دیگر این اطلاعات را نمی‌پرسد.').'</p></div><span class="status-pill '.($tgConfigured?'status-sent':'status-pending').'"><i></i>'.esc($tgConfigured?($isEn?'Configured':'تنظیم‌شده'):($isEn?'Setup required':'نیازمند تنظیم')).'</span></div><div class="telegram-guides"><article class="guide-card"><span class="guide-step">01</span><h3>'.esc($isEn?'Get a Bot Token':'دریافت Bot Token').'</h3><p>'.($isEn?'Open Telegram and message @BotFather. Run /newbot (or select your existing bot), then copy its API token. Keep it secret, and open your bot and press Start before testing delivery.':'در تلگرام به @BotFather پیام بدهید؛ دستور /newbot را اجرا کنید یا ربات قبلی را انتخاب کنید و API Token را کپی کنید. توکن را محرمانه نگه دارید؛ سپس وارد ربات خودتان شوید و Start را بزنید.').'</p><a class="guide-link" href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather ↗</a></article><article class="guide-card"><span class="guide-step">02</span><h3>'.esc($isEn?'Find your Chat ID':'پیدا کردن Chat ID').'</h3><p>'.($isEn?'Open @userinfobot and press Start. Copy the numeric ID it shows. For a group, add your bot to the group and use that group’s ID instead.':'به @userinfobot پیام بدهید و Start را بزنید؛ عددی که نمایش می‌دهد Chat ID شماست. برای گروه، ربات را به گروه اضافه کنید و شناسه همان گروه را وارد کنید.').'</p><a class="guide-link" href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot ↗</a></article></div><form method="post" class="telegram-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="telegram_settings"><label>'.esc($isEn?'Bot Token':'توکن ربات (Bot Token)').'<input type="password" name="bot_token" autocomplete="new-password" placeholder="'.esc($tgConfigured?($isEn?'Leave blank to keep current token':'برای حفظ توکن فعلی خالی بگذارید'):($isEn?'Paste token from @BotFather':'توکن دریافتی از BotFather را وارد کنید')).'"><small>'.esc($isEn?'Tokens are stored on the server and never displayed back.':'توکن در سرور ذخیره می‌شود و دوباره به‌صورت متن نمایش داده نمی‌شود.').'</small></label><label>'.esc($isEn?'Destination Chat ID':'شناسه مقصد (Chat ID)').'<input type="text" name="chat_id" required inputmode="numeric" pattern="-?[0-9]{1,20}" value="'.esc($tgChatDisplay).'" placeholder="'.esc($isEn?'e.g. 123456789 or -100…':'مثلاً 123456789 یا -100…').'"><small>'.esc($isEn?'Numeric IDs only; group IDs are often negative.':'شناسه عددی؛ شناسه گروه‌ها معمولاً منفی است.').'</small></label><div class="telegram-actions"><button class="btn btn-primary" type="submit">'.esc($isEn?'Save Telegram settings':'ذخیره تنظیمات تلگرام').'</button></div></form><form method="post" class="telegram-test-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="telegram_test"><button class="btn btn-ghost" type="submit" '.(!$tgConfigured?'disabled':'').'>'.icon_svg('send').' '.esc($isEn?'Send test message':'ارسال پیام آزمایشی').'</button><small>'.esc($isEn?'Sends one visible test message to the configured chat.':'یک پیام آزمایشی واقعی به چت تنظیم‌شده ارسال می‌کند.').'</small></form></section>';
+    $deliverySchedule=delivery_schedule_settings();
+    $deliveryTimesInput=implode(', ',array_map(static fn($time)=>substr((string)$time,0,5),$deliverySchedule['backup_times']));
+    $deliveryTimesLabel=$deliveryTimesInput!==''?$deliveryTimesInput:($isEn?'Not configured (legacy install)':'ثبت نشده (نصب قدیمی)');
+    echo '<section class="files-panel telegram-panel"><div class="panel-heading"><div><h2>'.icon_svg('send').' '.esc($isEn?'Telegram delivery settings':'تنظیمات اتصال تلگرام').'</h2><p>'.esc($isEn?'Configure or replace your bot credentials here; the generator no longer asks for them.':'توکن ربات و چت مقصد را اینجا وارد یا هر زمان لازم شد تغییر دهید؛ جنراتور دیگر این اطلاعات را نمی‌پرسد.').'</p></div><span class="status-pill '.($tgConfigured?'status-sent':'status-pending').'"><i></i>'.esc($tgConfigured?($isEn?'Configured':'تنظیم‌شده'):($isEn?'Setup required':'نیازمند تنظیم')).'</span></div><div class="telegram-guides"><article class="guide-card"><span class="guide-step">01</span><h3>'.esc($isEn?'Get a Bot Token':'دریافت Bot Token').'</h3><p>'.($isEn?'Open Telegram and message @BotFather. Run /newbot (or select your existing bot), then copy its API token. Keep it secret, and open your bot and press Start before testing delivery.':'در تلگرام به @BotFather پیام بدهید؛ دستور /newbot را اجرا کنید یا ربات قبلی را انتخاب کنید و API Token را کپی کنید. توکن را محرمانه نگه دارید؛ سپس وارد ربات خودتان شوید و Start را بزنید.').'</p><a class="guide-link" href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather ↗</a></article><article class="guide-card"><span class="guide-step">02</span><h3>'.esc($isEn?'Find your Chat ID':'پیدا کردن Chat ID').'</h3><p>'.($isEn?'Open @userinfobot and press Start. Copy the numeric ID it shows. For a group, add your bot to the group and use that group’s ID instead.':'به @userinfobot پیام بدهید و Start را بزنید؛ عددی که نمایش می‌دهد Chat ID شماست. برای گروه، ربات را به گروه اضافه کنید و شناسه همان گروه را وارد کنید.').'</p><a class="guide-link" href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot ↗</a></article></div><form method="post" class="telegram-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="telegram_settings"><label>'.esc($isEn?'Bot Token':'توکن ربات (Bot Token)').'<input type="password" name="bot_token" autocomplete="new-password" placeholder="'.esc($tgConfigured?($isEn?'Leave blank to keep current token':'برای حفظ توکن فعلی خالی بگذارید'):($isEn?'Paste token from @BotFather':'توکن دریافتی از BotFather را وارد کنید')).'"><small>'.esc($isEn?'Tokens are stored on the server and never displayed back.':'توکن در سرور ذخیره می‌شود و دوباره به‌صورت متن نمایش داده نمی‌شود.').'</small></label><label>'.esc($isEn?'Destination Chat ID':'شناسه مقصد (Chat ID)').'<input type="text" name="chat_id" required inputmode="numeric" pattern="-?[0-9]{1,20}" value="'.esc($tgChatDisplay).'" placeholder="'.esc($isEn?'e.g. 123456789 or -100…':'مثلاً 123456789 یا -100…').'"><small>'.esc($isEn?'Numeric IDs only; group IDs are often negative.':'شناسه عددی؛ شناسه گروه‌ها معمولاً منفی است.').'</small></label><div class="telegram-actions"><button class="btn btn-primary" type="submit">'.esc($isEn?'Save Telegram settings':'ذخیره تنظیمات تلگرام').'</button></div></form><form method="post" class="telegram-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="delivery_schedule"><label>'.esc($isEn?'Router backup time(s) (HH:MM, up to two)':'ساعت بکاپ روتر (HH:MM، حداکثر دو ساعت)').'<input type="text" name="backup_times" required value="'.esc($deliveryTimesInput).'" placeholder="00:00, 12:00"><small>'.esc(($isEn?'Current schedule: ':'زمان‌بندی فعلی: ').$deliveryTimesLabel).'</small></label><label>'.esc($isEn?'Telegram delay after backup (minutes)':'فاصله ارسال تلگرام پس از بکاپ (دقیقه)').'<input type="number" name="delay_minutes" min="0" max="30" required value="'.esc((string)$deliverySchedule['delay_minutes']).'"><small>'.esc($isEn?'The scanner retries once per minute for six minutes after this delay.':'اسکنر پس از این فاصله، شش دقیقه هر دقیقه تلاش می‌کند تا آپلود کامل شود.').'</small></label><div class="telegram-actions"><button class="btn btn-primary" type="submit">'.esc($isEn?'Save delivery schedule':'ذخیره زمان‌بندی ارسال').'</button></div><small style="grid-column:1/-1">'.esc($isEn?'This controls Linux-side Cron only; it does not change the RouterOS scheduler. Keep these times aligned with the router and the server local time zone.':'این تنظیم فقط Cron سرور را تغییر می‌دهد و Scheduler روتر را تغییر نمی‌دهد. ساعت‌ها باید با برنامه روتر و منطقه زمانی سرور هماهنگ باشند.').'</small></form><form method="post" class="telegram-test-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="telegram_test"><button class="btn btn-ghost" type="submit" '.(!$tgConfigured?'disabled':'').'>'.icon_svg('send').' '.esc($isEn?'Test Telegram connection':'تست اتصال تلگرام').'</button><small>'.esc($isEn?'Finds and sends the newest backup file from the configured server folder.':'آخرین فایل بکاپ موجود در پوشه تنظیم‌شده سرور را پیدا و به تلگرام ارسال می‌کند.').'</small></form></section>';
     echo '<section class="files-panel"><div class="panel-heading"><div><h2>'.icon_svg('files').' '.esc($isEn?'Your backups':'فایل‌های بکاپ شما').'</h2><p>'.($isEn?'Review recent backups and Telegram delivery status.':'وضعیت فایل‌ها و ارسال تلگرام را بررسی کنید.').'</p></div><div class="panel-tools"><label class="search-box">'.icon_svg('search').'<input id="backupSearch" type="search" placeholder="'.esc($t['search']).'" autocomplete="off"></label><button class="btn btn-primary" type="button" onclick="location.reload()">'.icon_svg('refresh').' <span>'.esc($t['refresh']).'</span></button></div></div><div class="table-wrap"><table id="backupTable"><thead><tr><th>'.esc($t['name']).'</th><th>'.esc($t['size']).'</th><th>'.esc($t['date']).'</th><th>'.esc($t['status']).'</th><th>'.esc($t['actions']).'</th></tr></thead><tbody>';
-    foreach ($files as $f) { $n=basename($f); $st=$state[$n]??[]; $status=(string)($st['status']??'pending'); $statusClass=$status==='sent'?'status-sent':($status==='failed'?'status-failed':'status-pending'); $statusText=$status==='sent'?$t['sent_status']:($status==='failed'?$t['failed_status']:$t['pending']); echo '<tr data-search="'.esc(strtolower($n)).'"><td><div class="file-name"><span class="file-icon">'.icon_svg('file').'</span><span><strong>'.esc($n).'</strong><small>'.esc($isEn?'MikroTik backup file':'فایل پشتیبان میکروتیک').'</small></span></div></td><td class="nowrap">'.esc(format_bytes((int)filesize($f))).'</td><td class="nowrap">'.esc(date('Y-m-d H:i',filemtime($f))).'</td><td><span class="status-pill '.$statusClass.'"><i></i>'.esc($statusText).'</span></td><td><div class="row-actions"><form method="post" class="inline-action"><input type="hidden" name="csrf" value="'.esc($csrf).'"/><input type="hidden" name="action" value="send"/><input type="hidden" name="file" value="'.esc($n).'"/><button class="icon-btn" type="submit" title="'.esc($t['send']).'" aria-label="'.esc($t['send']).'">'.icon_svg('send').'</button></form><form method="post" class="inline-action" onsubmit="return confirm(&quot;'.esc($t['confirm']).'&quot;)"><input type="hidden" name="csrf" value="'.esc($csrf).'"/><input type="hidden" name="action" value="delete"/><input type="hidden" name="file" value="'.esc($n).'"/><button class="icon-btn danger" type="submit" title="'.esc($t['delete']).'" aria-label="'.esc($t['delete']).'">'.icon_svg('trash').'</button></form></div></td></tr>'; }
+    foreach ($files as $f) { $n=basename($f); $st=$state[$n]??[]; $status=(string)($st['status']??'pending'); $statusClass=$status==='sent'?'status-sent':($status==='failed'?'status-failed':'status-pending'); $statusText=$status==='sent'?$t['sent_status']:($status==='failed'?$t['failed_status']:$t['pending']); echo '<tr data-search="'.esc(strtolower($n)).'"><td><div class="file-name"><span class="file-icon">'.icon_svg('file').'</span><span><strong>'.esc($n).'</strong><small>'.esc($isEn?'MikroTik backup file':'فایل پشتیبان میکروتیک').'</small></span></div></td><td class="nowrap">'.esc(format_bytes((int)filesize($f))).'</td><td class="nowrap">'.esc(date('Y-m-d H:i',filemtime($f))).'</td><td><span class="status-pill '.$statusClass.'"><i></i>'.esc($statusText).'</span></td><td><div class="row-actions"><form method="post" class="inline-action" onsubmit="return confirm(&quot;'.esc($t['confirm']).'&quot;)"><input type="hidden" name="csrf" value="'.esc($csrf).'"/><input type="hidden" name="action" value="delete"/><input type="hidden" name="file" value="'.esc($n).'"/><button class="icon-btn danger" type="submit" title="'.esc($t['delete']).'" aria-label="'.esc($t['delete']).'">'.icon_svg('trash').'</button></form></div></td></tr>'; }
     if (!$files) echo '<tr><td colspan="5"><div class="empty-state">'.icon_svg('folder-empty').'<strong>'.esc($t['empty']).'</strong></div></td></tr>';
     echo '</tbody></table></div><div class="panel-footer"><span>'.($isEn?'Showing':'نمایش'). ' <strong>'.count($files).'</strong> '.($isEn?'backup files':'فایل بکاپ').'</span><span class="footer-secure">'.icon_svg('shield').' '.($isEn?'Private server storage':'ذخیره‌سازی خصوصی روی سرور').'</span></div></section><footer class="app-footer"><span>© '.date('Y').' ATD · MikroTik Backup Studio</span><span>'.($isEn?'Built for safer backups':'ساخته‌شده برای بکاپ‌گیری امن‌تر').'</span></footer></main></div><script src="panel.js" defer></script></body></html>';
 }
@@ -493,8 +554,92 @@ const BACKUP_DIR = '$pathPhp';
 const STATE_FILE = '/var/lib/atd-mikrotik-backup-studio/state.php';
 const MAX_FILE_BYTES = $maxBytes;
 const PUBLIC_PORT = $publicPort;
+const BACKUP_SCHEDULE_TIMES = [$schedulePhp];
+const TELEGRAM_DELAY_MINUTES = 2;
 "@
+    $schedulePhp = ($scheduleTimes | ForEach-Object { "'" + $_ + "'" }) -join ', '
     $configB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($configPhp))
+
+    $cronHelper = @'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG=/etc/atd-mikrotik-backup-studio/config.php
+CRON_FILE=/etc/cron.d/atd-mikrotik-backup-telegram
+[[ "$#" -eq 1 && "$1" == "--apply" ]] || { echo "Usage: $0 --apply" >&2; exit 2; }
+[[ -s "$CONFIG" ]] || { echo "ATD private configuration is missing." >&2; exit 3; }
+command -v php >/dev/null 2>&1 || { echo "PHP CLI is required." >&2; exit 4; }
+
+settings="$(php -r '
+require "/etc/atd-mikrotik-backup-studio/config.php";
+$state = [];
+if (is_file(STATE_FILE)) {
+    $raw = @file_get_contents(STATE_FILE);
+    if (is_string($raw)) {
+        $prefix = "<?php http_response_code(404); exit; ?>\n";
+        if (strncmp($raw, $prefix, strlen($prefix)) === 0) $raw = substr($raw, strlen($prefix));
+        $decoded = json_decode($raw, true);
+        if (is_array($decoded)) $state = $decoded;
+    }
+}
+$saved = $state["_delivery_schedule"] ?? [];
+$times = is_array($saved) && isset($saved["backup_times"]) && is_array($saved["backup_times"])
+    ? $saved["backup_times"]
+    : (defined("BACKUP_SCHEDULE_TIMES") && is_array(BACKUP_SCHEDULE_TIMES) ? BACKUP_SCHEDULE_TIMES : []);
+$delay = is_array($saved) && isset($saved["delay_minutes"])
+    ? (int)$saved["delay_minutes"]
+    : (defined("TELEGRAM_DELAY_MINUTES") ? (int)TELEGRAM_DELAY_MINUTES : 2);
+echo implode(",", array_map(static fn($t) => substr((string)$t, 0, 5), $times)), "\n", $delay, "\n";
+')" || { echo "Could not read saved delivery schedule." >&2; exit 5; }
+
+mapfile -t values <<< "$settings"
+times_csv="${values[0]:-}"
+delay="${values[1]:-2}"
+[[ "$delay" =~ ^[0-9]{1,2}$ ]] && (( delay <= 30 )) || { echo "Invalid Telegram delay in saved settings." >&2; exit 6; }
+
+declare -A scheduled=()
+legacy_mode=0
+if [[ -z "$times_csv" ]]; then
+  # Legacy installs did not persist RouterOS schedule times; retain their safe
+  # compatibility behavior until the administrator saves a schedule in the panel.
+  legacy_mode=1
+else
+  IFS=',' read -r -a times <<< "$times_csv"
+  ((${#times[@]} >= 1 && ${#times[@]} <= 2)) || { echo "Expected one or two backup times." >&2; exit 6; }
+  for value in "${times[@]}"; do
+    [[ "$value" =~ ^([01][0-9]|2[0-3]):[0-5][0-9]$ ]] || { echo "Invalid backup time in saved settings." >&2; exit 6; }
+    hour=$((10#${value:0:2}))
+    minute=$((10#${value:3:2}))
+    start=$((hour * 60 + minute + delay))
+    # Retry the scanner once per minute for six minutes, starting after the
+    # requested delay, so a slow SFTP upload can finish without changing RouterOS.
+    for ((offset=0; offset<=5; offset++)); do
+      total=$(((start + offset) % 1440))
+      cron_minute=$((total % 60))
+      cron_hour=$((total / 60))
+      scheduled["$cron_minute $cron_hour"]="$cron_minute $cron_hour"
+    done
+  done
+fi
+
+tmp="$(mktemp /etc/cron.d/atd-mikrotik-backup-telegram.XXXXXX)"
+trap 'rm -f -- "$tmp"' EXIT
+if (( legacy_mode )); then
+  printf '%s\n' '* * * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1' > "$tmp"
+else
+  while IFS= read -r item; do
+    [[ -n "$item" ]] || continue
+    read -r cron_minute cron_hour <<< "$item"
+    printf '%s %s * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1\n' "$cron_minute" "$cron_hour" >> "$tmp"
+  done < <(printf '%s\n' "${scheduled[@]}" | sort -n -k2,2 -k1,1)
+fi
+chown root:root "$tmp"
+chmod 0644 "$tmp"
+mv -f -- "$tmp" "$CRON_FILE"
+trap - EXIT
+echo "ATD Telegram cron schedule applied."
+'@
+    $cronHelperHash = Get-Sha256Text ($cronHelper + "`n")
 
     $css = @'
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&display=swap');
@@ -555,6 +700,7 @@ fetch_asset() {
 fetch_asset 'send-backup.php' '__PHP_SHA256__'
 fetch_asset 'panel.css' '__CSS_SHA256__'
 fetch_asset 'panel.js' '__JS_SHA256__'
+fetch_asset 'cron-helper.sh' '__CRON_HELPER_SHA256__'
 printf '%s' '__CONFIG_B64__' | base64 --decode > "$TMP/config.php"
 chmod 0600 "$TMP/config.php"
 if command -v php >/dev/null 2>&1; then
@@ -568,6 +714,7 @@ bash "$TMP/install-standalone.sh" "$TMP"
     $installServer = $installServer.Replace('__PHP_SHA256__', $phpHash).
                                     Replace('__CSS_SHA256__', $cssHash).
                                     Replace('__JS_SHA256__', $jsHash).
+                                    Replace('__CRON_HELPER_SHA256__', $cronHelperHash).
                                     Replace('__CONFIG_B64__', $configB64)
     $installPath = Join-Path $outDir 'install.sh'
     [System.IO.File]::WriteAllText($installPath, $installServer, [System.Text.UTF8Encoding]::new($false))
@@ -611,7 +758,7 @@ TELEGRAM/PANEL INSTALL
 4. The installer downloads the panel files, verifies SHA-256 checksums, writes private config on the server, and installs ATD services.
 5. Paste paste-into-routeros-terminal.txt into MikroTik Terminal.
 6. Open the exact HTTPS URL printed by the installer and sign in with the initial panel password. Allow the selected public TCP port in the provider firewall if needed.
-7. In the panel's Telegram delivery settings, enter the Bot Token and destination Chat ID, then use Send test message. The Windows generator does not ask for these Telegram credentials.
+7. In the panel's Telegram delivery settings, enter the Bot Token and destination Chat ID, then use "Test Telegram connection". It sends the newest existing backup file; it does not send a separate text test message.
 
 SFTP-ONLY MODE
 No install.sh or web panel is created. Paste paste-into-routeros-terminal.txt into MikroTik Terminal and use create-sftp-directory.txt if the remote folder still needs to be created.
