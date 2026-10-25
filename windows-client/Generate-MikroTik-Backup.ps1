@@ -30,6 +30,13 @@ function New-HexRandom([int]$ByteCount) {
     try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
     return ([BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
 }
+function Get-Sha256Text([string]$Text) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($Text)
+        return ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant()
+    } finally { $sha.Dispose() }
+}
 function Convert-HexToBytes([string]$Hex) {
     $bytes = New-Object byte[] ([int]($Hex.Length / 2))
     for ($i = 0; $i -lt $bytes.Length; $i++) { $bytes[$i] = [Convert]::ToByte($Hex.Substring($i * 2, 2), 16) }
@@ -500,15 +507,24 @@ error_log('MikroTik backup Telegram delivery failed; HTTP=' . $status . '; error
 http_response_code(502);
 exit('TELEGRAM_FAILED');
 '@
-    $php = $php.Replace('__RELAY_TOKEN__', $tokenPhp).
-                Replace('__BOT_TOKEN__', $botPhp).
-                Replace('__CHAT_ID__', $chatPhp).
-                Replace('__PANEL_PASSWORD_SALT__', $passwordSalt).
-                Replace('__PANEL_PASSWORD_HASH__', $panelPasswordHash).
-                Replace('__BACKUP_DIR__', $pathPhp).
-                Replace('__MAX_BYTES__', [string]$maxBytes)
-    $phpPath = Join-Path $outDir 'send-backup.php'
-    [System.IO.File]::WriteAllText($phpPath, $php, [System.Text.UTF8Encoding]::new($false))
+    # Keep customer-specific values separate from the versioned PHP application code.
+    $phpTemplate = $php
+    $phpHash = Get-Sha256Text $phpTemplate
+    $cssHash = Get-Sha256Text $css
+    $jsHash = Get-Sha256Text $js
+    $configPhp = @"
+<?php
+declare(strict_types=1);
+const RELAY_TOKEN = '$tokenPhp';
+const TELEGRAM_BOT_TOKEN = '$botPhp';
+const TELEGRAM_CHAT_ID = '$chatPhp';
+const PANEL_PASSWORD_SALT = '$passwordSalt';
+const PANEL_PASSWORD_HASH = '$panelPasswordHash';
+const BACKUP_DIR = '$pathPhp';
+const STATE_FILE = '/var/lib/atd-mikrotik-backup-studio/state.php';
+const MAX_FILE_BYTES = $maxBytes;
+"@
+    $configB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($configPhp))
 
     $css = @'
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&display=swap');
@@ -545,25 +561,55 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
     $installServer = @'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# One simple installer. The runtime uses isolated ports and does not edit existing web-server configs.
 [[ $(id -u) -eq 0 ]] || { echo 'Run as root: sudo bash install.sh' >&2; exit 2; }
-SRC="$(cd "$(dirname "$0")" && pwd)"
-for f in send-backup.php panel.css panel.js; do [[ -f "$SRC/$f" ]] || { echo "Missing $f; extract the complete generated package." >&2; exit 3; }; done
-if ! command -v curl >/dev/null 2>&1; then
+command -v curl >/dev/null 2>&1 || {
   if command -v apt-get >/dev/null 2>&1; then export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y curl ca-certificates
   elif command -v dnf >/dev/null 2>&1; then dnf install -y curl ca-certificates
   elif command -v yum >/dev/null 2>&1; then yum install -y curl ca-certificates
   else echo 'Cannot install curl: apt, dnf, or yum is required.' >&2; exit 4; fi
+}
+BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
+TMP="$(mktemp -d /tmp/atd-bootstrap.XXXXXX)"
+chmod 0700 "$TMP"
+trap 'rm -rf -- "$TMP"' EXIT
+fetch_asset() {
+  local name="$1" expected="$2"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$name" -o "$TMP/$name"
+  [[ -s "$TMP/$name" ]] || { echo "Downloaded asset is empty: $name" >&2; exit 5; }
+  printf '%s  %s\n' "$expected" "$TMP/$name" | sha256sum --check --status || {
+    echo "Asset checksum mismatch: $name. This package and GitHub assets are from different revisions; regenerate the package." >&2
+    exit 5
+  }
+}
+fetch_asset 'send-backup.php' '__PHP_SHA256__'
+fetch_asset 'panel.css' '__CSS_SHA256__'
+fetch_asset 'panel.js' '__JS_SHA256__'
+printf '%s' '__CONFIG_B64__' | base64 --decode > "$TMP/config.php"
+chmod 0600 "$TMP/config.php"
+if command -v php >/dev/null 2>&1; then
+  php -l "$TMP/config.php" >/dev/null || { echo 'Generated private configuration failed PHP syntax validation.' >&2; exit 6; }
 fi
-TMP="$(mktemp)"; trap 'rm -f -- "$TMP"' EXIT
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/install-standalone.sh' -o "$TMP"
-[[ -s "$TMP" ]] || { echo 'Could not download the ATD installer.' >&2; exit 4; }
-bash "$TMP" "$SRC"
-'@
-    [System.IO.File]::WriteAllText((Join-Path $outDir 'install.sh'), $installServer, [System.Text.UTF8Encoding]::new($false))
-
-    [System.IO.File]::WriteAllText((Join-Path $outDir 'panel.css'), $css, [System.Text.UTF8Encoding]::new($false))
-    [System.IO.File]::WriteAllText((Join-Path $outDir 'panel.js'), $js, [System.Text.UTF8Encoding]::new($false))
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/install-standalone.sh' -o "$TMP/install-standalone.sh"
+[[ -s "$TMP/install-standalone.sh" ]] || { echo 'Could not download the ATD runtime installer.' >&2; exit 5; }
+chmod 0600 "$TMP/install-standalone.sh"
+bash "$TMP/install-standalone.sh" "$TMP"
+'@@
+    $installServer = $installServer.Replace('__PHP_SHA256__', $phpHash).
+                                    Replace('__CSS_SHA256__', $cssHash).
+                                    Replace('__JS_SHA256__', $jsHash).
+                                    Replace('__CONFIG_B64__', $configB64)
+    $installPath = Join-Path $outDir 'install.sh'
+    [System.IO.File]::WriteAllText($installPath, $installServer, [System.Text.UTF8Encoding]::new($false))
+    # The generated installer contains this customer's secret configuration. Restrict it to the current Windows user.
+    try {
+        $acl = Get-Acl $installPath
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($rule in @($acl.Access)) { [void]$acl.RemoveAccessRule($rule) }
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'Allow')
+        $acl.AddAccessRule($rule)
+        Set-Acl -Path $installPath -AclObject $acl
+    } catch { Write-Warning 'Could not restrict install.sh permissions automatically. Store the generated-output folder securely.' }
 }
 
 $schedulerLines = @()
@@ -580,22 +626,22 @@ $terminalSetup = '/system script add name="' + $scriptName + '" policy=ftp,passw
 
 $readme = @"
 ATD MikroTik Backup Studio
-Panel: scheduled MikroTik RouterOS 7 backups over SFTP, with optional Telegram delivery and a password-protected web panel.
+RouterOS 7 scheduled backups over SFTP, with optional Telegram delivery and a password-protected panel.
 
-FILES
+OUTPUT
 - paste-into-routeros-terminal.txt: paste the complete file into MikroTik Terminal.
-- send-backup.php: panel and Telegram relay.
-- panel.css: panel styles.
-- panel.js: panel interface behavior.
-- install.sh: automatic Linux server installer.
+- install.sh: customer-specific server bootstrap. It contains secret configuration; do not share it publicly.
+- router-backup.rsc: RouterOS script source.
+- create-sftp-directory.txt: command to create the remote SFTP folder if needed.
 
 INSTALL
-1. Copy the generated package to your Linux server.
+1. Transfer install.sh to the Linux server using a secure method.
 2. Run: sudo bash install.sh
-3. Open the HTTPS URL printed by the installer and sign in with the panel password you configured.
-4. If your package uses Telegram, test delivery with a test backup first.
+3. The installer fetches version-matched panel code from GitHub, checks SHA-256 hashes, creates the private server configuration, and installs the panel.
+4. Paste paste-into-routeros-terminal.txt into MikroTik Terminal.
+5. Open the HTTPS URL printed by the installer and sign in with the initial panel password.
 
-The installer checks the server, installs only missing requirements, and uses its own ports. It does not edit existing Nginx/Apache configuration or stop other services. A self-signed TLS certificate causes a browser warning.
+The installer uses ATD-specific paths and services. It does not edit existing Nginx/Apache configuration. A self-signed TLS certificate may cause a browser warning. Keep install.sh private because it contains the initial configuration.
 "@
 [System.IO.File]::WriteAllText((Join-Path $outDir 'README.txt'), $readme, [System.Text.UTF8Encoding]::new($false))
 
