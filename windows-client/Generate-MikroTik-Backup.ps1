@@ -288,16 +288,7 @@ if ($useTelegram) {
     $php = @'
 <?php
 declare(strict_types=1);
-header('Content-Type: text/plain; charset=utf-8');
-
-const RELAY_TOKEN = '__RELAY_TOKEN__';
-const TELEGRAM_BOT_TOKEN = '__BOT_TOKEN__';
-const TELEGRAM_CHAT_ID = '__CHAT_ID__';
-const PANEL_PASSWORD_SALT = '__PANEL_PASSWORD_SALT__';
-const PANEL_PASSWORD_HASH = '__PANEL_PASSWORD_HASH__';
-const BACKUP_DIR = '__BACKUP_DIR__';
-const STATE_FILE = '/var/lib/atd-mikrotik-backup-studio/state.php';
-const MAX_FILE_BYTES = __MAX_BYTES__;
+require_once '/etc/atd-mikrotik-backup-studio/config.php';
 const STABILITY_CHECKS = 3;
 const STABILITY_INTERVAL_SECONDS = 2;
 const MAX_WAIT_SECONDS = 90;
