@@ -709,38 +709,28 @@ command -v curl >/dev/null 2>&1 || {
 TMP="$(mktemp -d /tmp/atd-bootstrap.XXXXXX)"
 chmod 0700 "$TMP"
 trap 'rm -rf -- "$TMP"' EXIT
-write_asset() {
-  local name="$1" payload="$2" expected="$3"
-  printf '%s' "$payload" | base64 --decode > "$TMP/$name"
-  [[ -s "$TMP/$name" ]] || { echo "Packaged asset is empty: $name" >&2; exit 5; }
-  printf '%s  %s\n' "$expected" "$TMP/$name" | sha256sum --check --status || {
-    echo "Packaged asset checksum mismatch: $name. The generated package is internally inconsistent." >&2
-    exit 5
-  }
+BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
+fetch_asset() {
+  local name="$1"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$name" -o "$TMP/$name"
+  [[ -s "$TMP/$name" ]] || { echo "Downloaded asset is empty: $name" >&2; exit 5; }
 }
-write_asset 'send-backup.php' '__PHP_B64__' '__PHP_SHA256__'
-write_asset 'panel.css' '__CSS_B64__' '__CSS_SHA256__'
-write_asset 'panel.js' '__JS_B64__' '__JS_SHA256__'
-write_asset 'cron-helper.sh' '__CRON_HELPER_B64__' '__CRON_HELPER_SHA256__'
+# Application assets come from GitHub at install time. They are deliberately not
+# embedded in this customer-specific package, so later UI/PHP changes remain updateable.
+fetch_asset 'send-backup.php'
+fetch_asset 'panel.css'
+fetch_asset 'panel.js'
+fetch_asset 'cron-helper.sh'
 printf '%s' '__CONFIG_B64__' | base64 --decode > "$TMP/config.php"
 chmod 0600 "$TMP/config.php"
 if command -v php >/dev/null 2>&1; then
   php -l "$TMP/config.php" >/dev/null || { echo 'Generated private configuration failed PHP syntax validation.' >&2; exit 6; }
 fi
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 'https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment/install-standalone.sh' -o "$TMP/install-standalone.sh"
-[[ -s "$TMP/install-standalone.sh" ]] || { echo 'Could not download the ATD runtime installer.' >&2; exit 5; }
+fetch_asset 'install-standalone.sh'
 chmod 0600 "$TMP/install-standalone.sh"
 bash "$TMP/install-standalone.sh" "$TMP"
 '@
-    $installServer = $installServer.Replace('__PHP_B64__', $phpB64).
-                                    Replace('__CSS_B64__', $cssB64).
-                                    Replace('__JS_B64__', $jsB64).
-                                    Replace('__CRON_HELPER_B64__', $cronHelperB64).
-                                    Replace('__PHP_SHA256__', $phpHash).
-                                    Replace('__CSS_SHA256__', $cssHash).
-                                    Replace('__JS_SHA256__', $jsHash).
-                                    Replace('__CRON_HELPER_SHA256__', $cronHelperHash).
-                                    Replace('__CONFIG_B64__', $configB64)
+    $installServer = $installServer.Replace('__CONFIG_B64__', $configB64)
     $installPath = Join-Path $outDir 'install.sh'
     [System.IO.File]::WriteAllText($installPath, $installServer, [System.Text.UTF8Encoding]::new($false))
     # The generated installer contains this customer's secret configuration. Restrict it to the current Windows user.
@@ -780,7 +770,7 @@ TELEGRAM/PANEL INSTALL
 1. The SFTP host must be the same Linux server as the panel, and the backup path must be the real absolute filesystem path (not a chroot-relative SFTP path).
 2. Transfer install.sh securely to that Linux server.
 3. Run: sudo bash install.sh
-4. The installer downloads the panel files, verifies SHA-256 checksums, writes private config on the server, and installs ATD services.
+4. The installer downloads the panel application files from GitHub at install time, writes private config on the server, and installs ATD services. Future PHP/CSS/JS updates are delivered by the server updater.
 5. Paste paste-into-routeros-terminal.txt into MikroTik Terminal.
 6. Open the exact HTTPS URL printed by the installer and sign in with the initial panel password. Allow the selected public TCP port in the provider firewall if needed.
 7. In the panel's Telegram delivery settings, enter the Bot Token and destination Chat ID, then use "Test Telegram connection". It sends the newest existing backup file; it does not send a separate text test message.
