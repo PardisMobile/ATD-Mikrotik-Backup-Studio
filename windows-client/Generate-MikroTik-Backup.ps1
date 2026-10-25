@@ -379,7 +379,7 @@ function normalize_backup_times(string $input): ?array {
 function apply_delivery_cron(): bool {
     if (!function_exists('exec')) return false;
     $output = []; $code = 1;
-    @exec('sudo -n /usr/local/sbin/atd-mikrotik-backup-cron --apply 2>&1', $output, $code);
+    @exec('sudo -n /usr/bin/systemctl start atd-mikrotik-backup-cron.service 2>&1', $output, $code);
     return $code === 0;
 }
 function latest_backup_name(): ?string {
