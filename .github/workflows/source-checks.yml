@@ -78,8 +78,20 @@ jobs:
               raise SystemExit("Bootstrap must not require separate panel files from the user")
           generator = source
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
-          if "https://' + $sftpHost.Trim() + ':' + $publicPort + '/send-backup.php'" not in generator:
-              raise SystemExit("Generated relay URL must use the configured public port and root endpoint")
+          router_start = source.index("$routerScript = @\"")
+          router_end = source.index("\n\"@", router_start)
+          router_script = source[router_start:router_end]
+          if "/tool fetch url=" in router_script or "X-Backup-Token" in router_script or "telegramOK" in router_script:
+              raise SystemExit("Generated RouterOS script must not call the Telegram relay")
+          php = Path("server-deployment/send-backup.php").read_text(encoding="utf-8")
+          if "in_array('--worker', $argv ?? [], true)" not in php:
+              raise SystemExit("PHP application must provide the server-side Telegram worker")
+          runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
+          if "atd-mikrotik-backup-telegram-worker.timer" not in runtime:
+              raise SystemExit("Installer must install the automatic Telegram worker timer")
+          updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
+          if "atd-mikrotik-backup-telegram-worker.timer" not in updater:
+              raise SystemExit("Updater must deploy the automatic Telegram worker")
           if "const PUBLIC_PORT = $publicPort;" not in generator:
               raise SystemExit("Private config must persist the selected public port")
           if "PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;'" not in runtime:
