@@ -164,7 +164,7 @@ New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 $obsoleteSchedulerFile = Join-Path $outDir 'scheduler-commands.txt'
 if (Test-Path $obsoleteSchedulerFile) { Remove-Item $obsoleteSchedulerFile -Force }
 # Remove obsolete separately generated panel assets from prior runs; the server now fetches verified code from GitHub.
-foreach ($obsolete in @('send-backup.php', 'panel.css', 'panel.js')) {
+foreach ($obsolete in @('install.sh', 'send-backup.php', 'panel.css', 'panel.js')) {
     $obsoletePath = Join-Path $outDir $obsolete
     if (Test-Path $obsoletePath -PathType Leaf) { Remove-Item $obsoletePath -Force }
 }
