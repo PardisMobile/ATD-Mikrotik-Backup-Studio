@@ -43,10 +43,6 @@ systemctl reset-failed 2>/dev/null || true
 # Application files contain no user backup data. Keep private config/state for
 # a possible reinstall unless the operator explicitly requests their removal.
 rm -rf -- "$APP"
-if id atdbackup >/dev/null 2>&1; then
-  userdel atdbackup 2>/dev/null || true
-fi
-
 echo
 echo 'ATD services and application files have been removed.'
 echo "Private configuration preserved: $TLS"
