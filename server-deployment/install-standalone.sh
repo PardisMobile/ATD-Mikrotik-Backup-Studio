@@ -3,8 +3,8 @@ set -Eeuo pipefail
 # Standalone ATD panel runtime. Run as root with the generated package directory as argument.
 [[ $(id -u) -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 2; }
 SRC=${1:-$(pwd)}
-for f in send-backup.php panel.css panel.js; do [[ -f "$SRC/$f" ]] || { echo "Missing $f in $SRC" >&2; exit 3; }; done
-BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR = '\\(.*\\)';$/\\1/p" "$SRC/send-backup.php" | head -n1)
+for f in send-backup.php panel.css panel.js config.php; do [[ -f "$SRC/$f" ]] || { echo "Missing generated asset $f in $SRC" >&2; exit 3; }; done
+BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR = '\\(.*\\)';$/\\1/p" "$SRC/config.php" | head -n1)
 [[ "$BACKUP_DIR" == /* && "$BACKUP_DIR" != / && "$BACKUP_DIR" != /root && "$BACKUP_DIR" != /home && "$BACKUP_DIR" != /etc && "$BACKUP_DIR" != /var && "$BACKUP_DIR" != /usr && "$BACKUP_DIR" != /opt && "$BACKUP_DIR" != /tmp ]] || { echo 'Missing or unsafe BACKUP_DIR in generated PHP.' >&2; exit 4; }
 case "$BACKUP_DIR" in *"/../"*|*/..) echo 'Unsafe backup path.' >&2; exit 4;; esac
 
