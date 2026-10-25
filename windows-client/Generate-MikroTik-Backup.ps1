@@ -235,7 +235,7 @@ $(if ($deleteAfterUpload) {
         '        :log error ("BACKUP: delivery succeeded but local cleanup failed: " . $localFile)'
         '    }'
         '} else={'
-        '    :log error ("BACKUP: delivery incomplete; local file retained: " . $localFile)'
+        '    :log error ("BACKUP: backup creation or SFTP upload failed; local file retained: " . $localFile)'
         '}'
     ) -join [Environment]::NewLine
 } else {
