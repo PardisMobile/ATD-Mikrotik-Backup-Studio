@@ -23,7 +23,7 @@
 - `docs/TEST-REPORT.md` — current test limitations and release gate.
 - `.gitignore` — excludes local secrets and generated backups.
 
-The Windows client, icon, launcher, build scripts, and final integrated package still need to be added. Do not assume the paths mentioned in future-work notes are available until they appear in the repository browser.
+Partial Windows-client synchronization has started: the launcher C# source and BAT launch/build scripts are present. The core `Generate-MikroTik-Backup.ps1` and custom `.ico` are still missing, so the client cannot yet be built/run from this repository. The GitHub-downloaded panel installer flow is also not complete.
 
 ## Server setup (current scaffold only)
 
