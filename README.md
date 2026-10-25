@@ -10,10 +10,10 @@ ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, upload
 
 ## Install
 1. Run the Windows generator/EXE and enter the required settings once.
-2. Transfer the generated `install.sh` securely to the Linux server. It contains private customer configuration; do not publish or share it.
-3. Run `sudo bash install.sh`. The script downloads the matching panel code from GitHub, verifies SHA-256 checksums, writes private configuration on the server, and installs the ATD services.
+2. If Telegram/panel mode is enabled, transfer the generated `install.sh` securely to the Linux server. It contains private customer configuration; do not publish or share it.
+3. In Telegram/panel mode, run `sudo bash install.sh`. The script downloads matching panel code from GitHub, verifies SHA-256 checksums, writes private configuration on the server, and installs the ATD services.
 4. Paste `paste-into-routeros-terminal.txt` into the MikroTik RouterOS terminal.
-5. Open the HTTPS URL printed by the installer and sign in with the initial panel password.
+5. In Telegram/panel mode, open the HTTPS URL printed by the installer and sign in with the initial panel password. In SFTP-only mode, no panel installer is generated.
 
 ## Update
 Run `sudo atd-mikrotik-backup-update` on the Linux server. The updater stages and syntax-checks new application code, backs up the previous code, and preserves private configuration, delivery state, and uploaded backups. It restarts only the ATD PHP service. If validation or activation fails, it attempts to restore the previous application files.
