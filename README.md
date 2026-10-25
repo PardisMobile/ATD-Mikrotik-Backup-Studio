@@ -17,7 +17,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 
 ### 1. Generate the package on Windows
 1. Run the Windows generator/EXE.
-2. Choose **3) SFTP + Telegram** to test the complete flow (SFTP upload, panel, and Telegram). Mode **1** tests SFTP only and does not install a panel.
+2. Choose **2) SFTP + Telegram panel** to enable the complete flow (SFTP upload, panel, and Telegram). Mode **1** is SFTP-only and does not install a panel.
 3. Enter the Linux server's hostname/IP and the existing SFTP username/password that already work for you. SFTP uses port **22**.
 4. Set the backup directory to a dedicated absolute Linux path. For example, use `/root/Uploads` if that is the real directory your existing SFTP workflow uses. Do not enter a chroot-relative path.
 5. Set the public HTTPS port (default `24443`) and a panel password of at least 12 characters. Telegram credentials are configured after installation from the panel; the generator no longer asks for a Bot Token or Chat ID.
@@ -29,7 +29,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 3. In panel mode, the installer creates the configured backup directory if it does not exist and grants the dedicated ATD panel service access to it. It does not require you to create a new SFTP account and does not change the existing SFTP credentials.
 4. Note the exact HTTPS URL printed by the installer. If remote access is needed, allow the selected TCP port in the server/provider firewall after checking existing firewall policy. The installer does not change firewall rules.
 5. Open that URL and sign in with the initial panel password. The default TLS certificate is self-signed, so a browser warning is expected.
-6. Enter your Telegram bot token and destination Chat ID in the Windows generator. The Linux installer saves them in private configuration, so scheduled delivery works without a separate setup step. The panel still lets an administrator change settings and send a test message.
+6. Sign in to the panel, enter the Telegram bot token and destination Chat ID in **Telegram delivery settings**, then use **Send test message** to verify delivery.
 
 ### 3. Configure the MikroTik
 1. Open the generated `paste-into-routeros-terminal.txt` and paste its full contents into the RouterOS 7 terminal on the test router.
@@ -41,7 +41,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 ### 4. Verify the complete flow
 - Confirm a new `.backup` file appears in the configured server directory.
 - Sign in to the panel and confirm that the same file is listed.
-- Confirm that a new SFTP upload appears in the panel and is sent automatically by the dedicated Linux cron job. The scanner runs every minute, ignores files already present at installation, checks file-size stability, and avoids duplicate sends by filename and SHA-256.
+- Confirm that a new SFTP upload appears in the panel and is sent automatically by the dedicated Linux cron job. The scanner runs once per minute, ignores files already present at installation, checks file-size stability, and avoids duplicate sends by filename and SHA-256.
 - In the panel, test manual send/retry on a test file.
 - Test deletion only with a disposable test backup and confirm the selected file disappears.
 - If a file does not appear, check the RouterOS log, SFTP path/permissions, the ATD PHP/TLS services, and the panel callback response before changing any existing SFTP configuration.
