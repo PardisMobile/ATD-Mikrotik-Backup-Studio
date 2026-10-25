@@ -689,8 +689,8 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
 
     $cssHash = Get-Sha256Text $css
     $jsHash = Get-Sha256Text $js
-    # Package the exact assets used to calculate the checksums. Never fetch mutable
-    # main-branch copies during installation, as that can cause false checksum failures.
+    # Canonical templates remain in this generator for source-parity checks; the generated
+    # bootstrap downloads a single immutable Git commit snapshot so assets cannot be mixed.
     $phpB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($phpTemplate))
     $cssB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($css))
     $jsB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($js))
@@ -709,7 +709,11 @@ command -v curl >/dev/null 2>&1 || {
 TMP="$(mktemp -d /tmp/atd-bootstrap.XXXXXX)"
 chmod 0700 "$TMP"
 trap 'rm -rf -- "$TMP"' EXIT
-BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
+API='https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main'
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$API" -o "$TMP/commit.json"
+COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$TMP/commit.json" | sed -n '1p')"
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve an immutable GitHub commit for this installation.' >&2; exit 5; }
+BASE="https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$COMMIT/server-deployment"
 fetch_asset() {
   local name="$1"
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$name" -o "$TMP/$name"
@@ -728,7 +732,7 @@ if command -v php >/dev/null 2>&1; then
 fi
 fetch_asset 'install-standalone.sh'
 chmod 0600 "$TMP/install-standalone.sh"
-bash "$TMP/install-standalone.sh" "$TMP"
+ATD_SOURCE_COMMIT="$COMMIT" bash "$TMP/install-standalone.sh" "$TMP"
 '@
     $installServer = $installServer.Replace('__CONFIG_B64__', $configB64)
     $installPath = Join-Path $outDir 'install.sh'
