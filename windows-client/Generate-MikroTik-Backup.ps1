@@ -105,7 +105,8 @@ if ($useTelegram) {
     Write-Host 'The panel is served at /send-backup.php on its own HTTPS port, not inside the SFTP backup directory.' -ForegroundColor DarkGray
     $customRelay = Read-Host 'Enter a custom HTTPS relay URL only if you have a matching domain/reverse proxy, or press Enter to use this default'
     if (-not [string]::IsNullOrWhiteSpace($customRelay)) { $relayBaseUrl = $customRelay.Trim() }
-    if ($relayBaseUrl -notmatch '^https://[^/]+(?::[0-9]{1,5})?/send-backup\.php    $relayToken = (New-HexRandom 32)
+    if ($relayBaseUrl -notmatch '^https://[^/]+(?::[0-9]{1,5})?/send-backup\.php$') { throw 'Enter an HTTPS URL ending exactly in /send-backup.php; for a custom path, configure a reverse proxy to that endpoint.' }
+    $relayToken = (New-HexRandom 32)
     $telegramBotToken = Read-Required 'Telegram bot token (from @BotFather)'
     $telegramChatId = Read-Required 'Telegram destination chat ID (user, group or channel)'
     $panelPassword = Read-SecretText 'Choose initial password for the web management panel'
