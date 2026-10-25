@@ -9,7 +9,7 @@ ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, upload
 - Keeps first-run settings and delivery state separate from updateable application code.
 
 ## Install
-1. Run the Windows generator/EXE and enter the required settings.
+1. Run the Windows generator/EXE and enter the required settings. The SFTP host must be the same Linux server as the panel, and the backup path must be the real absolute filesystem path (not a chroot-relative SFTP path).
 2. In Telegram/Panel mode, choose a public HTTPS port (default `24443`). Use the same port for this installation; allow it in the provider firewall if required.
 3. Transfer the generated `install.sh` securely to the Linux server. It contains private customer configuration; do not publish or share it.
 4. Run `sudo bash install.sh`. The script downloads matching panel code from GitHub, verifies SHA-256 checksums, writes private configuration on the server, and installs the ATD services.
