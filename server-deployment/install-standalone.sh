@@ -51,9 +51,9 @@ chmod 0750 "$APP"
 chmod 0700 "$STATE" "$STATE/sessions"
 chown -R atdbackup:atdbackup "$STATE"
 # Establish a first-run baseline so historic files are not bulk-sent to Telegram.
-if [[ ! -s "$STATE/worker-started-at" ]]; then date +%s > "$STATE/worker-started-at"; fi
-chown atdbackup:atdbackup "$STATE/worker-started-at"
-chmod 0600 "$STATE/worker-started-at"
+if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then date +%s > "$STATE/telegram-scan-started-at"; fi
+chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
+chmod 0600 "$STATE/telegram-scan-started-at"
 chown root:atdbackup "$TLS"
 chmod 0750 "$TLS"
 # Keep configuration and delivery state outside the versioned application directory.
@@ -155,9 +155,9 @@ NoNewPrivileges=true
 [Install]
 WantedBy=multi-user.target
 EOF
-cat > /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service <<EOF
+cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service <<EOF
 [Unit]
-Description=ATD MikroTik Backup Studio automatic Telegram delivery
+Description=ATD MikroTik Backup Studio Telegram backup scan
 After=network-online.target atd-mikrotik-backup-php.service
 Wants=network-online.target
 [Service]
@@ -165,25 +165,25 @@ Type=oneshot
 User=atdbackup
 Group=atdbackup
 WorkingDirectory=/opt/atd-mikrotik-backup-studio
-ExecStart=/usr/bin/php -d expose_php=0 /opt/atd-mikrotik-backup-studio/send-backup.php --worker
+ExecStart=/usr/bin/php -d expose_php=0 /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups
 ProtectSystem=strict
 PrivateTmp=true
 NoNewPrivileges=true
 ReadWritePaths=/var/lib/atd-mikrotik-backup-studio $BACKUP_DIR
 EOF
-cat > /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer <<'EOF'
+cat > /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer <<'EOF'
 [Unit]
-Description=Check for new ATD MikroTik backups to send to Telegram
+Description=Scan new ATD MikroTik backups for Telegram delivery
 [Timer]
 OnBootSec=2min
 OnUnitActiveSec=1min
 Persistent=true
-Unit=atd-mikrotik-backup-telegram-worker.service
+Unit=atd-mikrotik-backup-telegram-scan.service
 [Install]
 WantedBy=timers.target
 EOF
 systemctl daemon-reload
-systemctl enable atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service atd-mikrotik-backup-telegram-worker.timer
+systemctl enable atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service atd-mikrotik-backup-telegram-scan.timer
 if systemctl is-active --quiet atd-mikrotik-backup-php.service 2>/dev/null; then
   systemctl restart atd-mikrotik-backup-php.service atd-mikrotik-backup-tls.service
 else
@@ -191,7 +191,7 @@ else
 fi
 systemctl is-active --quiet atd-mikrotik-backup-php.service
 systemctl is-active --quiet atd-mikrotik-backup-tls.service
-systemctl start atd-mikrotik-backup-telegram-worker.timer
+systemctl start atd-mikrotik-backup-telegram-scan.timer
 
 # Install the ATD-only updater. It never changes the saved customer configuration or backup state.
 UPDATE_TMP=$(mktemp)
