@@ -19,7 +19,7 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: server-deployment
-          severity: warning
+          severity: error
       - name: Check installer safety invariants
         run: |
           grep -q 'php -l "\$APP/send-backup.php"' server-deployment/install-standalone.sh
