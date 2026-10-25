@@ -2,29 +2,25 @@
 
 Last reviewed: 2026-10-25.
 
-## Verified from repository inspection
-- The repository contains the PHP relay/panel endpoint, CSS, JavaScript, server install helper, Windows launcher/build BAT files, documentation, and a source-check workflow.
-- The optional server update entry point is available as:
-  `sudo bash install-server.sh --update /absolute/path/to/installed/panel`
-- The updater downloads the allowlisted PHP/CSS/JS files over HTTPS, stages them before touching live files, creates a timestamped backup, carries matching customer-specific constants forward, and checks PHP syntax before/after replacement.
-- SFTP remains a separate workflow and is not modified by the updater.
+## Repository-level implementation review
+- The Windows PowerShell generator is present at `windows-client/Generate-MikroTik-Backup.ps1`.
+- The generator creates a customer-specific `install.sh` containing the first-run configuration payload and the expected SHA-256 hashes for the matching server PHP/CSS/JS files.
+- The generated installer downloads panel application assets from GitHub and validates checksums before installation. The generated output no longer requires the user to transfer separate `send-backup.php`, `panel.css`, or `panel.js` files.
+- The PHP application loads private constants from `/etc/atd-mikrotik-backup-studio/config.php`; that config is not part of the updateable application assets.
+- The runtime installer preserves an existing private config and allocated ports on re-run, and no longer changes host-wide firewall rules automatically.
+- A dedicated updater is available as `sudo atd-mikrotik-backup-update`; it stages and syntax-checks app code, backs up prior app files, and targets only the ATD PHP service.
 
-## Not yet verified
-- No end-to-end execution of the updater on a real Linux web server has been recorded in this report.
-- Telegram delivery, bot token/Chat ID correctness, backup-file stability detection, and the panel login flow still require a real test.
-- The original `windows-client/Generate-MikroTik-Backup.ps1` and `windows-client/AmirTaheri-Backup.ico` are not currently present in the GitHub tree. As a result, the repository cannot yet be claimed as a complete reproducible Windows EXE source package.
-- The GitHub update option has not yet been wired into the original EXE-generated server script because that original PowerShell generator source is missing from the repository. The standalone server update helper is committed, but it is not proof of complete EXE integration.
+## Automated checks
+- GitHub Actions workflows run Bash syntax checks, ShellCheck, PHP syntax checks, and source/invariant checks. Their status must be checked against the latest commit before release.
+- Static validation does not establish that a real server install or update succeeds end to end.
 
-## Required release gate
-Do not label this release production-ready until the exact PowerShell generator/icon are restored, the generated installer invokes the update option, and tests pass on a clean test server for both SFTP-only and Telegram/panel modes. Verify that updates preserve all customer-specific values and that rollback works after a deliberately invalid staged PHP file.
+## Not yet verified on a real server
+- A clean Linux VM install using the exact generated `install.sh` and generated private configuration.
+- Re-running the installer with an existing installation and verifying every config value, allocated port, state entry, and backup file remains unchanged.
+- Updating PHP/CSS/JS from GitHub and validating rollback after a deliberately invalid staged file.
+- A real MikroTik RouterOS 7 scheduled backup and SFTP transfer.
+- Actual Telegram bot delivery, duplicate-send behavior, and the panel password-change flow.
+- Compatibility with all Linux distributions and existing host firewall/provider policies.
 
-
-## Additional checks performed (2026-10-25)
-- Registered the full integrated PowerShell generator source at `windows-client/Generate-MikroTik-Backup.ps1`; source includes the server PHP/CSS/JS generation and the post-install GitHub update command.
-- Fixed the generated server installer so it detects the web worker account before applying file ownership, and prints an example HTTPS panel URL after installation.
-- Added a `runuser`-first permission check with a `sudo` fallback, avoiding a hard dependency on `sudo` when `runuser` is available.
-- Extracted the embedded generated PHP with test-only placeholder values: `php -l` passed.
-- Extracted the generated server installer: `bash -n` passed.
-- Ran the generated PHP endpoint on PHP's local development server; the panel login page returned HTTP 200 and rendered the Persian login heading.
-- Not tested: a real RouterOS device, live SFTP transfer, real Telegram bot delivery, real HTTPS virtual host, production PHP-FPM user/ACL setup, or a complete live GitHub update against an installed server.
-- Compatibility safeguard: the current GitHub updater intentionally skips replacing the generated PHP when it detects the generator's legacy constants/state schema. It updates CSS/JS only in that case, protecting customer-specific constants and state. A schema-compatible PHP migration is still required before PHP code can be safely updated for those installations.
+## Release gate
+Do not describe the project as production-ready until the latest CI checks pass and the full install/update/SFTP/Telegram flow has been exercised on a disposable Linux server. Record the exact commit and the actual test environment in any final release report.
