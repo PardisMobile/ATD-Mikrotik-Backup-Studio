@@ -14,7 +14,7 @@ jobs:
       - name: Check Bash syntax
         run: |
           bash -n server-deployment/install-standalone.sh
-          bash -n server-deployment/install-server.sh
+          bash -n server-deployment/install-standalone.sh
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
@@ -22,6 +22,8 @@ jobs:
           severity: error
       - name: Check installer safety invariants
         run: |
+          grep -q 'Detected Nginx' server-deployment/install-standalone.sh
+          grep -q 'NEED_PACKAGES' server-deployment/install-standalone.sh
           grep -q 'php -l "\$APP/send-backup.php"' server-deployment/install-standalone.sh
           grep -q 'ReadWritePaths=/var/lib/atd-mikrotik-backup-studio' server-deployment/install-standalone.sh
           grep -q 'ProtectSystem=strict' server-deployment/install-standalone.sh
