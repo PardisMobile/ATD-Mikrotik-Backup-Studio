@@ -74,13 +74,6 @@ else
 fi
 php -l "$TLS/config.php" >/dev/null || { echo 'Private configuration syntax check failed.' >&2; exit 8; }
 grep -q "const BACKUP_DIR" "$TLS/config.php" || { echo 'Private configuration is missing BACKUP_DIR.' >&2; exit 8; }
-# Add the callback token to existing installations without overwriting other private settings.
-if ! grep -q "const TRIGGER_TOKEN" "$TLS/config.php"; then
-  TRIGGER_TOKEN=$(php -r 'require $argv[1]; echo defined("TRIGGER_TOKEN") ? TRIGGER_TOKEN : "";' "$SRC/config.php")
-  [[ "$TRIGGER_TOKEN" =~ ^[a-f0-9]{64}$ ]] || { echo 'Generated configuration lacks a valid trigger token.' >&2; exit 8; }
-  printf "\nconst TRIGGER_TOKEN = '%s';\n" "$TRIGGER_TOKEN" >> "$TLS/config.php"
-  chown root:atdbackup "$TLS/config.php"; chmod 0640 "$TLS/config.php"
-fi
 
 for f in send-backup.php panel.css panel.js; do
   if [[ -e "$APP/$f" ]]; then cp -p "$APP/$f" "$APP/$f.backup.$(date +%Y%m%d%H%M%S)"; fi
@@ -181,6 +174,40 @@ fi
 systemctl is-active --quiet atd-mikrotik-backup-php.service
 systemctl is-active --quiet atd-mikrotik-backup-tls.service
 
+# Install/enable cron only when no cron daemon is already active.
+# ATD adds one dedicated /etc/cron.d entry and never edits existing user crontabs.
+if ! systemctl is-active --quiet cron.service 2>/dev/null && ! systemctl is-active --quiet crond.service 2>/dev/null; then
+  if command -v apt-get >/dev/null 2>&1; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y
+    apt-get install -y cron
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y cronie
+  elif command -v yum >/dev/null 2>&1; then
+    yum install -y cronie
+  else
+    echo 'A running cron service is required for automatic Telegram delivery.' >&2; exit 10
+  fi
+fi
+if systemctl cat cron.service >/dev/null 2>&1; then
+  systemctl enable --now cron.service
+elif systemctl cat crond.service >/dev/null 2>&1; then
+  systemctl enable --now crond.service
+else
+  echo 'Could not locate the cron service after installation.' >&2; exit 10
+fi
+if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
+  date +%s > "$STATE/telegram-scan-started-at"
+  chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
+  chmod 0600 "$STATE/telegram-scan-started-at"
+fi
+cat > /etc/cron.d/atd-mikrotik-backup-telegram <<'CRON'
+* * * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1
+CRON
+chown root:root /etc/cron.d/atd-mikrotik-backup-telegram
+chmod 0644 /etc/cron.d/atd-mikrotik-backup-telegram
+
+
 # Install the ATD-only updater. It never changes the saved customer configuration or backup state.
 UPDATE_TMP=$(mktemp)
 trap 'rm -f -- "$UPDATE_TMP"' EXIT
@@ -203,4 +230,5 @@ echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"
 echo 'Certificate: self-signed; browser warning expected, TLS traffic is encrypted.'
 echo "Firewall: $FW"
 echo "Backup directory: $BACKUP_DIR"
-echo 'Existing web-server configurations and ports were not changed.'
+echo 'Existing web-server configurations and ports were not changed.
+Telegram scan: dedicated cron job runs every minute; RouterOS/SFTP scripts are unchanged.'
