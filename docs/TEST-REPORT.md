@@ -28,3 +28,11 @@ Last reviewed: 2026-10-25.
 
 ## Release gate
 Do not describe the project as production-ready until the latest CI checks pass and the full install/update/SFTP/Telegram flow has been exercised on a disposable Linux server. Record the exact commit and the actual test environment in any final release report.
+
+## Review of main after password-policy synchronization (2026-10-25)
+
+- Reviewed the Windows generator and canonical PHP panel on `main`: the generator enforces a minimum of 8 characters, retries after too-short input or confirmation mismatch, and the embedded PHP UI/validation uses the same 8-character policy.
+- Reviewed the latest main workflow definition: it covers PHP lint for both canonical and embedded PHP, JavaScript/CSS parsing, canonical asset parity, generated bootstrap Bash syntax, key behavior invariants, installer/updater Bash checks, ShellCheck, and Windows PowerShell parsing.
+- The GitHub connector returned no combined status checks and no PR-triggered workflow runs for the latest direct-to-main commit. This is **unknown/not verified**, not a passing CI result. Check the Actions page for the push-triggered workflow run before release.
+- Project handoff context was added to the README under “Project Context for Continued Development” so future sessions can recover the current branch policy, implementation architecture, and verification limits.
+- Branch comparison still reports `fix/telegram-schedule-and-connection-test` as 25 commits ahead and 9 behind current `main`, with the common base at `15022946ec458758eff516968ee1cfcce7f673e3`. Tree-level file comparison shows the main implementation already contains the reviewed Cron/Telegram/install/update/workflow behavior plus the newer password policy and generator guidance. Do not delete the extra branch until its unique commits are individually reconciled and cleanup is possible.
