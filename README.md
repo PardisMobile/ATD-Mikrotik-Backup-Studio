@@ -1,14 +1,16 @@
 # ATD MikroTik Backup Studio
 
-ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, uploads them over the existing SFTP workflow, and automatically sends newly arrived, stable backup files to Telegram using a dedicated Linux-side cron job. RouterOS scripts remain SFTP-only; Telegram delivery failures cannot affect backup creation, SFTP, or the Keep/Delete local-file choice.
+ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, uploads them over the existing SFTP workflow, and automatically sends newly arrived, stable backup files to Telegram using a Linux-side Cron schedule derived from the selected RouterOS backup times. RouterOS scripts remain SFTP-only; Telegram delivery failures cannot affect backup creation, SFTP, or the Keep/Delete local-file choice.
 
 ## Panel features
 - Lists uploaded `.backup` files from the configured Linux backup directory.
-- Shows Telegram delivery status and supports manual send/retry.
+- Shows Telegram delivery status; one connection test sends the newest existing backup file to Telegram.
 - Supports selecting old backup files for confirmed deletion.
 - Allows changing the panel password.
-- Lets you configure or replace the Telegram Bot Token and destination Chat ID inside the panel, with direct setup guides for `@BotFather` and `@userinfobot` and an optional test message.
+- Lets you configure or replace the Telegram Bot Token and destination Chat ID inside the panel, with direct setup guides for `@BotFather` and `@userinfobot`.
 - Persian/English interface, light/dark theme, and responsive layout.
+- Stores the backup time(s) selected in the Windows generator and schedules Linux-side Telegram scans after a configurable delay (default: 2 minutes), with a six-minute retry window.
+- Provides one **Test Telegram connection** action that sends the newest existing `.backup` file; there is no separate text-only test or per-file send button.
 - Keeps first-run settings and delivery state separate from updateable application code.
 
 ## First test: one MikroTik router + one Linux server
@@ -29,7 +31,7 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 3. In panel mode, the installer creates the configured backup directory if it does not exist and grants the dedicated ATD panel service access to it. It does not require you to create a new SFTP account and does not change the existing SFTP credentials.
 4. Note the exact HTTPS URL printed by the installer. If remote access is needed, allow the selected TCP port in the server/provider firewall after checking existing firewall policy. The installer does not change firewall rules.
 5. Open that URL and sign in with the initial panel password. The default TLS certificate is self-signed, so a browser warning is expected.
-6. Sign in to the panel, enter the Telegram bot token and destination Chat ID in **Telegram delivery settings**, then use **Send test message** to verify delivery.
+6. Sign in to the panel, enter the Telegram bot token and destination Chat ID in **Telegram delivery settings**, then use **Test Telegram connection**. It checks the configured backup folder and sends its newest `.backup` file (not a separate text message).
 
 ### 3. Configure the MikroTik
 1. Open the generated `paste-into-routeros-terminal.txt` and paste its full contents into the RouterOS 7 terminal on the test router.
@@ -41,8 +43,8 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 ### 4. Verify the complete flow
 - Confirm a new `.backup` file appears in the configured server directory.
 - Sign in to the panel and confirm that the same file is listed.
-- Confirm that a new SFTP upload appears in the panel and is sent automatically by the dedicated Linux cron job. The scanner runs once per minute, ignores files already present at installation, checks file-size stability, and avoids duplicate sends by filename and SHA-256.
-- In the panel, test manual send/retry on a test file.
+- Confirm that a new SFTP upload appears in the panel and is sent automatically according to the backup times saved by the Windows generator. Cron retries scanning for six minutes after the configured delay, ignores files already present at first install, checks file-size stability, and avoids duplicate sends by filename and SHA-256.
+- In the panel, use the single **Test Telegram connection** action to send the newest existing backup file.
 - Test deletion only with a disposable test backup and confirm the selected file disappears.
 - If a file does not appear, check the RouterOS log, SFTP path/permissions, the ATD PHP/TLS services, and the cron scanner logs before changing any existing SFTP configuration.
 
@@ -55,7 +57,7 @@ The generator also creates `create-sftp-directory.txt`, containing a command for
 - `create-sftp-directory.txt`: command to create the configured SFTP directory.
 
 ## Update
-To update an existing installation, run `sudo atd-mikrotik-backup-update`. The updater stages and syntax-checks the application, backs up the previous code, preserves private configuration, delivery state, and uploaded backups, removes obsolete ATD-only worker/timer units, and installs the dedicated cron entry. It does not edit RouterOS scripts, third-party web-server configuration, or firewall rules.
+To update an existing installation, run `sudo atd-mikrotik-backup-update`. The updater stages and syntax-checks the application, backs up the previous code, preserves private configuration, delivery state, and uploaded backups, removes obsolete ATD-only worker/timer units, and reapplies the dedicated Cron entry from saved delivery settings. It does not edit RouterOS scripts, third-party web-server configuration, or firewall rules.
 
 ## Safety and limitations
 - ATD uses dedicated paths, service names, and ports. It does not edit Nginx/Apache configuration or automatically change host-wide firewall rules.

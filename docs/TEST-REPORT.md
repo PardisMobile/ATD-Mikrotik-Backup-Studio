@@ -5,7 +5,7 @@ Last reviewed: 2026-10-25.
 ## Repository-level implementation review
 - The Windows generator creates a customer-specific `install.sh` in Telegram/Panel mode. It embeds the first-run config payload and SHA-256 hashes for matching PHP/CSS/JS application assets.
 - The generated installer downloads panel assets from GitHub and verifies hashes before installation; separate panel asset transfers are not required.
-- Newly generated RouterOS scripts use the original SFTP-only flow and never call the panel or Telegram. A dedicated Linux cron job scans for new files, PHP checks file-size stability, sends the file to Telegram, and records its SHA-256 to avoid duplicate delivery. Installer/updater cleanup removes legacy worker/scanner units and timers.
+- Newly generated RouterOS scripts use the original SFTP-only flow and never call the panel or Telegram. The generator persists the chosen backup times in the private config. The Cron helper schedules server-side scans after those times, with a configurable delay and a six-minute retry window. The single Telegram connection test sends the newest existing backup file using sendDocument; per-file send buttons and text-only test messages are not used. Installer/updater cleanup removes legacy worker/scanner units and timers.
 - The runtime installer reads the selected public port from the generated configuration, checks for conflicts on a clean install, preserves the installed port on re-runs, and aborts if a new package expects a different port.
 - PHP sessions use an ATD-owned writable directory, and panel session cookies are explicitly marked Secure because TLS terminates at the local socat proxy.
 - The original RouterOS identity-based backup filename behavior is preserved; the scanner skips unsupported filenames rather than modifying the SFTP core.
@@ -22,7 +22,7 @@ Last reviewed: 2026-10-25.
 - Re-running the installer and verifying every config value, assigned port, state entry, and backup file remains unchanged.
 - Updating PHP/CSS/JS from GitHub and validating rollback after a deliberately invalid staged file.
 - A real MikroTik RouterOS 7 scheduled backup and SFTP transfer.
-- Actual Telegram bot delivery, duplicate-send behavior, Linux cron scanner retry behavior, and panel password-change flow.
+- Actual Telegram bot file delivery, duplicate-send behavior, schedule-triggered Linux Cron retries, schedule-setting changes from the panel, and panel password-change flow.
 - Certificate trust behavior for RouterOS and browser access on a public server with the intended domain/certificate.
 - Compatibility with all Linux distributions and existing host firewall/provider policies.
 

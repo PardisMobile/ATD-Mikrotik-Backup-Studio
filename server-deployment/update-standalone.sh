@@ -16,7 +16,7 @@ LEGACY_UNITS=(
   atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
 )
 for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
-rm -f "$STATE/telegram-scan-started-at" "$STATE/worker-started-at" "$STATE/scanner-started-at"
+# Preserve delivery baseline and state during updates.
 systemctl daemon-reload
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI is required; no packages were installed.' >&2; exit 4; }
@@ -29,11 +29,12 @@ mkdir -m 0700 "$BACKUP"
 cleanup(){ rm -rf -- "$TMP"; }
 trap cleanup EXIT
 
-for f in send-backup.php panel.css panel.js; do
+for f in send-backup.php panel.css panel.js cron-helper.sh; do
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$f" -o "$TMP/$f"
   [[ -s "$TMP/$f" ]] || { echo "Downloaded asset is empty: $f" >&2; exit 5; }
 done
 php -l "$TMP/send-backup.php" >/dev/null || { echo 'New PHP code failed syntax validation; live files were not changed.' >&2; exit 6; }
+bash -n "$TMP/cron-helper.sh" || { echo 'New Cron helper failed shell syntax validation; live files were not changed.' >&2; exit 6; }
 php -l "$TLS/config.php" >/dev/null || { echo 'Existing private configuration is invalid; live files were not changed.' >&2; exit 6; }
 grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-backup.php" || { echo 'Downloaded PHP does not use the separate private configuration schema; update aborted.' >&2; exit 6; }
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
@@ -53,11 +54,24 @@ rollback(){
     if [[ -f "$BACKUP/$f" ]]; then cp -p "$BACKUP/$f" "$APP/$f"
     else rm -f -- "$APP/$f"; fi
   done
+  if [[ -f "$BACKUP/cron-helper.sh" ]]; then cp -p "$BACKUP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
+  else rm -f /usr/local/sbin/atd-mikrotik-backup-cron; fi
+  if [[ -f "$BACKUP/cron-apply" ]]; then cp -p "$BACKUP/cron-apply" /etc/cron.d/atd-mikrotik-backup-apply
+  else rm -f /etc/cron.d/atd-mikrotik-backup-apply; fi
   chown root:atdbackup "$APP/send-backup.php" "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
   chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true
 }
+# Preserve existing helper and apply-worker Cron file so rollback can restore them.
+[[ ! -e /usr/local/sbin/atd-mikrotik-backup-cron ]] || cp -p /usr/local/sbin/atd-mikrotik-backup-cron "$BACKUP/cron-helper.sh"
+[[ ! -e /etc/cron.d/atd-mikrotik-backup-apply ]] || cp -p /etc/cron.d/atd-mikrotik-backup-apply "$BACKUP/cron-apply"
+install -o root -g root -m 0750 "$TMP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
+cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
+* * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
+CRON
+chown root:root /etc/cron.d/atd-mikrotik-backup-apply
+chmod 0644 /etc/cron.d/atd-mikrotik-backup-apply
 install -o root -g atdbackup -m 0640 "$TMP/send-backup.php" "$APP/send-backup.php.new"
 install -o root -g atdbackup -m 0644 "$TMP/panel.css" "$APP/panel.css.new"
 install -o root -g atdbackup -m 0644 "$TMP/panel.js" "$APP/panel.js.new"
@@ -98,15 +112,12 @@ if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
   chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
   chmod 0600 "$STATE/telegram-scan-started-at"
 fi
-cat > /etc/cron.d/atd-mikrotik-backup-telegram <<'CRON'
-* * * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1
-CRON
-chown root:root /etc/cron.d/atd-mikrotik-backup-telegram
-chmod 0644 /etc/cron.d/atd-mikrotik-backup-telegram
+/usr/local/sbin/atd-mikrotik-backup-cron --apply
 
 echo "ATD application updated successfully."
 echo "Private configuration preserved: $TLS/config.php"
 echo "Delivery state and backups preserved: $STATE and configured backup directory."
 echo "Pre-update application backup: $BACKUP"
 echo "No third-party web-server configuration or firewall rules were changed."
-echo "ATD Telegram cron: /etc/cron.d/atd-mikrotik-backup-telegram (every minute)."
+echo "ATD Telegram Cron reapplied from saved delivery settings: /etc/cron.d/atd-mikrotik-backup-telegram."
+# The Cron helper writes entries invoking --scan-backups.

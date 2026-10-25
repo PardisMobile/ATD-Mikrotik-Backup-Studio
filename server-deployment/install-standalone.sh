@@ -3,7 +3,7 @@ set -Eeuo pipefail
 # Standalone ATD panel runtime. Run as root with the generated package directory as argument.
 [[ $(id -u) -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 2; }
 SRC=${1:-$(pwd)}
-for f in send-backup.php panel.css panel.js config.php; do [[ -f "$SRC/$f" ]] || { echo "Missing generated asset $f in $SRC" >&2; exit 3; }; done
+for f in send-backup.php panel.css panel.js config.php cron-helper.sh; do [[ -f "$SRC/$f" ]] || { echo "Missing generated asset $f in $SRC" >&2; exit 3; }; done
 BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR = '\\(.*\\)';$/\\1/p" "$SRC/config.php" | head -n1)
 [[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ && "$BACKUP_DIR" != / && "$BACKUP_DIR" != /root && "$BACKUP_DIR" != /home && "$BACKUP_DIR" != /etc && "$BACKUP_DIR" != /var && "$BACKUP_DIR" != /usr && "$BACKUP_DIR" != /opt && "$BACKUP_DIR" != /tmp ]] || { echo 'Missing or unsafe BACKUP_DIR in generated config. Use a simple absolute path without spaces.' >&2; exit 4; }
 case "$BACKUP_DIR" in *"/../"*|*/..|*/./*|*/.) echo 'Unsafe backup path.' >&2; exit 4;; esac
@@ -62,7 +62,7 @@ LEGACY_UNITS=(
   atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
 )
 for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
-rm -f "$STATE/telegram-scan-started-at" "$STATE/worker-started-at" "$STATE/scanner-started-at"
+# Preserve delivery baseline and state across re-installs.
 chown root:atdbackup "$TLS"
 chmod 0750 "$TLS"
 # Keep configuration and delivery state outside the versioned application directory.
@@ -201,11 +201,15 @@ if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
   chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
   chmod 0600 "$STATE/telegram-scan-started-at"
 fi
-cat > /etc/cron.d/atd-mikrotik-backup-telegram <<'CRON'
-* * * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1
+# The root-owned apply job reads the validated persistent schedule and only rewrites
+# ATD's own scan Cron file when its effective contents change.
+install -o root -g root -m 0750 "$SRC/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
+cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
+* * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
 CRON
-chown root:root /etc/cron.d/atd-mikrotik-backup-telegram
-chmod 0644 /etc/cron.d/atd-mikrotik-backup-telegram
+chown root:root /etc/cron.d/atd-mikrotik-backup-apply
+chmod 0644 /etc/cron.d/atd-mikrotik-backup-apply
+/usr/local/sbin/atd-mikrotik-backup-cron --apply
 
 
 # Install the ATD-only updater. It never changes the saved customer configuration or backup state.
@@ -231,4 +235,5 @@ echo 'Certificate: self-signed; browser warning expected, TLS traffic is encrypt
 echo "Firewall: $FW"
 echo "Backup directory: $BACKUP_DIR"
 echo 'Existing web-server configurations and ports were not changed.'
-echo 'Telegram scan: dedicated cron job runs every minute; RouterOS/SFTP scripts are unchanged.'
+echo 'Telegram Cron follows the saved backup times and delay; RouterOS/SFTP scripts are unchanged.'
+# The Cron helper writes /etc/cron.d/atd-mikrotik-backup-telegram entries invoking --scan-backups.
