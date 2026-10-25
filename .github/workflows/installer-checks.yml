@@ -1,0 +1,30 @@
+name: Installer checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  shell-validation:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Bash syntax
+        run: |
+          bash -n server-deployment/install-standalone.sh
+          bash -n server-deployment/install-server.sh
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: server-deployment
+          severity: warning
+      - name: Check installer safety invariants
+        run: |
+          grep -q 'php -l "\$APP/send-backup.php"' server-deployment/install-standalone.sh
+          grep -q 'ReadWritePaths=/var/lib/atd-mikrotik-backup-studio' server-deployment/install-standalone.sh
+          grep -q 'ProtectSystem=strict' server-deployment/install-standalone.sh
+          ! grep -q 'chmod 777' server-deployment/install-standalone.sh
+          ! grep -q 'nginx' server-deployment/install-standalone.sh
+          ! grep -q 'apachectl' server-deployment/install-standalone.sh
