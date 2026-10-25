@@ -84,14 +84,14 @@ jobs:
           if "/tool fetch url=" in router_script or "X-Backup-Token" in router_script or "telegramOK" in router_script:
               raise SystemExit("Generated RouterOS script must not call the Telegram relay")
           php = Path("server-deployment/send-backup.php").read_text(encoding="utf-8")
-          if "in_array('--worker', $argv ?? [], true)" not in php:
+          if "in_array('--scan-backups', $argv ?? [], true)" not in php:
               raise SystemExit("PHP application must provide the server-side Telegram worker")
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
-          if "atd-mikrotik-backup-telegram-worker.timer" not in runtime:
-              raise SystemExit("Installer must install the automatic Telegram worker timer")
+          if "atd-mikrotik-backup-telegram-scan.timer" not in runtime:
+              raise SystemExit("Installer must install the automatic Telegram scan timer")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
-          if "atd-mikrotik-backup-telegram-worker.timer" not in updater:
-              raise SystemExit("Updater must deploy the automatic Telegram worker")
+          if "atd-mikrotik-backup-telegram-scan.timer" not in updater:
+              raise SystemExit("Updater must deploy the automatic Telegram scanner")
           config_start = source.index("$configPhp = @\"")
           config_end = source.index("\n\"@", config_start)
           generated_config = source[config_start:config_end]
