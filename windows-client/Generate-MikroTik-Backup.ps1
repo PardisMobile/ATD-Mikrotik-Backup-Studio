@@ -650,10 +650,7 @@ Write-Host '2. Copy the entire file and paste it into MikroTik Terminal.'
 Write-Host '3. Verify the script and scheduler exist with the exact name you entered.'
 Write-Host ''
 Write-Host 'Created by Amir Taheri | Orax Tech Solutions LLC' -ForegroundColor DarkCyan
-Write-Host '+989347682358' -ForegroundColor Gray -or $remoteDir -eq '/' -or $remoteDir -match '(^|/)\.\.?(/|$)') {
-    throw 'Use a safe absolute SFTP directory containing only letters, numbers, dot, underscore, dash and slash; do not use spaces or dot-dot segments.'
-}
-# Keep backup files in the configured private SFTP directory; derive the panel URL folder from its basename.
+Write-Host '+989347682358' -ForegroundColor Gray
 $panelFolderName = Split-Path -Leaf $remoteDir.TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($panelFolderName) -or $panelFolderName -in @('.', '..') -or $panelFolderName -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw 'Remote directory must end with a simple folder name, e.g. /root/uploads or /Upload.' }
 $panelPath = '/' + $panelFolderName + '/send-backup.php'
