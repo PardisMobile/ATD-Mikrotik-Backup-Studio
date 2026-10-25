@@ -25,20 +25,38 @@ for f in "${FILES[@]}"; do
 done
 php -l "$WORK/send-backup.php" >/dev/null || { echo "Downloaded PHP failed syntax validation; current version unchanged." >&2; exit 11; }
 
-# Preserve customer-specific constants from the currently installed PHP.
-# Only string constants that exist in both versions are carried forward.
-php -r '
-$old=file_get_contents($argv[1]); $new=file_get_contents($argv[2]);
-$names=["ATD_RELAY_TOKEN","ATD_TELEGRAM_BOT_TOKEN","ATD_TELEGRAM_CHAT_ID","ATD_PANEL_PASSWORD_HASH","ATD_BACKUP_DIR","ATD_STATE_FILE"];
-foreach($names as $name){
-  $pattern="/const\\s+".preg_quote($name,"/")."\\s*=\\s*(\x27(?:\\\\.|[^\x27])*\x27|\x22(?:\\\\.|[^\x22])*\x22)\\s*;/s";
-  if(preg_match($pattern,$old,$m) && preg_match($pattern,$new)){
-    $new=preg_replace($pattern,"const ".$name." = ".$m[1].";",$new,1);
+# Determine PHP schema before replacing the endpoint. The generator's legacy PHP and
+# repository template currently use different constant/state schemas. Never overwrite a
+# customer-configured PHP endpoint with an incompatible template.
+LEGACY_SCHEMA=0
+if grep -qE "^const (TELEGRAM_BOT_TOKEN|BOT_TOKEN) =" "$TARGET/send-backup.php"; then LEGACY_SCHEMA=1; fi
+if [[ "$LEGACY_SCHEMA" -eq 1 ]]; then
+  echo "Detected legacy generator PHP schema. PHP update skipped to protect customer settings and state format."
+  rm -f -- "$WORK/send-backup.php"
+  FILES=(panel.css panel.js)
+else
+  # Map the current template's configuration constants from the installed endpoint.
+  php -r '
+  $old=file_get_contents($argv[1]); $new=file_get_contents($argv[2]);
+  $pairs=[
+    "ATD_RELAY_TOKEN"=>"ATD_RELAY_TOKEN",
+    "ATD_TELEGRAM_BOT_TOKEN"=>"ATD_TELEGRAM_BOT_TOKEN",
+    "ATD_TELEGRAM_CHAT_ID"=>"ATD_TELEGRAM_CHAT_ID",
+    "ATD_PANEL_PASSWORD_HASH"=>"ATD_PANEL_PASSWORD_HASH",
+    "ATD_BACKUP_DIR"=>"ATD_BACKUP_DIR",
+    "ATD_STATE_FILE"=>"ATD_STATE_FILE"
+  ];
+  foreach($pairs as $oldName=>$newName){
+    $pOld="/const\\s+".preg_quote($oldName,"/")."\\s*=\\s*(\x27(?:\\\\.|[^\x27])*\x27|\x22(?:\\\\.|[^\x22])*\x22)\\s*;/s";
+    $pNew="/const\\s+".preg_quote($newName,"/")."\\s*=\\s*(\x27(?:\\\\.|[^\x27])*\x27|\x22(?:\\\\.|[^\x22])*\x22)\\s*;/s";
+    if(preg_match($pOld,$old,$m) && preg_match($pNew,$new)){
+      $new=preg_replace($pNew,"const ".$newName." = ".$m[1].";",$new,1);
+    }
   }
-}
-file_put_contents($argv[2],$new);
-' "$TARGET/send-backup.php" "$WORK/send-backup.php"
-php -l "$WORK/send-backup.php" >/dev/null || { echo "Preserved configuration failed syntax validation; current version unchanged." >&2; exit 12; }
+  file_put_contents($argv[2],$new);
+  ' "$TARGET/send-backup.php" "$WORK/send-backup.php"
+  php -l "$WORK/send-backup.php" >/dev/null || { echo "Preserved configuration failed syntax validation; current version unchanged." >&2; exit 12; }
+fi
 
 # Save exact prior files before replacing any live file.
 for f in "${FILES[@]}"; do cp -p -- "$TARGET/$f" "$BACKUP/$f"; done
@@ -48,6 +66,7 @@ for f in "${FILES[@]}"; do
 done
 for f in "${FILES[@]}"; do mv -f -- "$TARGET/.$f.atd-new" "$TARGET/$f" || { rollback; exit 13; }; done
 php -l "$TARGET/send-backup.php" >/dev/null || { rollback; exit 14; }
-echo "Update completed. Customer configuration constants were carried forward where names matched."
+echo "Update completed for: ${FILES[*]}."
+echo "Customer-specific settings were not intentionally modified. Legacy PHP was skipped when schema compatibility could not be established."
 echo "Backup of previous files: $BACKUP"
 echo "Review panel behavior and run Telegram/SFTP smoke tests before production use."
