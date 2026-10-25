@@ -72,6 +72,11 @@ else
 fi
 chown root:root "$tmp"
 chmod 0644 "$tmp"
+if [[ -r "$CRON_FILE" ]] && cmp -s "$tmp" "$CRON_FILE"; then
+  rm -f -- "$tmp"
+  trap - EXIT
+  exit 0
+fi
 mv -f -- "$tmp" "$CRON_FILE"
 trap - EXIT
 echo "ATD Telegram cron schedule applied."
