@@ -42,6 +42,29 @@ function csrf_token(): string {
 function check_csrf(): bool {
     return isset($_POST['csrf'], $_SESSION['csrf']) && is_string($_POST['csrf']) && hash_equals((string)$_SESSION['csrf'], (string)$_POST['csrf']);
 }
+function telegram_settings(): array {
+    $state = load_state();
+    $saved = $state['_telegram_settings'] ?? [];
+    $token = is_array($saved) ? trim((string)($saved['bot_token'] ?? '')) : '';
+    $chat = is_array($saved) ? trim((string)($saved['chat_id'] ?? '')) : '';
+    // Backward compatibility for installations created by older generators.
+    if ($token === '') $token = defined('TELEGRAM_BOT_TOKEN') ? trim((string)TELEGRAM_BOT_TOKEN) : '';
+    if ($chat === '') $chat = defined('TELEGRAM_CHAT_ID') ? trim((string)TELEGRAM_CHAT_ID) : '';
+    return ['bot_token'=>$token, 'chat_id'=>$chat];
+}
+function valid_telegram_settings(string $token, string $chat): bool {
+    return (bool)preg_match('/\\A[0-9]{5,}:[A-Za-z0-9_-]{20,}\\z/', $token)
+        && (bool)preg_match('/\\A-?[0-9]{1,20}\\z/', $chat);
+}
+function telegram_api(string $token, string $method, array $fields = []): array {
+    $ch = curl_init('https://api.telegram.org/bot'.$token.'/'.$method);
+    curl_setopt_array($ch, [CURLOPT_POST=>true, CURLOPT_POSTFIELDS=>$fields, CURLOPT_RETURNTRANSFER=>true,
+        CURLOPT_CONNECTTIMEOUT=>12, CURLOPT_TIMEOUT=>30, CURLOPT_SSL_VERIFYPEER=>true, CURLOPT_SSL_VERIFYHOST=>2]);
+    $response = curl_exec($ch); $error = curl_error($ch); $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    $data = is_string($response) ? json_decode($response, true) : null;
+    return ['ok'=>$error==='' && $http>=200 && $http<300 && is_array($data) && ($data['ok']??false)===true,
+        'http'=>$http, 'error'=>$error, 'data'=>is_array($data)?$data:[]];
+}
 function send_telegram_file(string $name, bool $force = false): array {
     $base = realpath(BACKUP_DIR);
     if ($base === false || !preg_match('/\A[A-Za-z0-9_. -]+\.backup\z/', $name) || basename($name) !== $name) return [false, 'INVALID_FILENAME'];
@@ -61,8 +84,8 @@ function send_telegram_file(string $name, bool $force = false): array {
     $size=@filesize($path); if ($size===false || $size<1 || $size>MAX_FILE_BYTES) return [false,'FILE_SIZE_REJECTED'];
     $hash=hash_file('sha256',$path); $state=load_state();
     if (!$force && isset($state[$name]) && ($state[$name]['sha256']??'')===$hash && ($state[$name]['status']??'')==='sent') return [true,'ALREADY_SENT'];
-    $ch=curl_init('https://api.telegram.org/bot'.TELEGRAM_BOT_TOKEN.'/sendDocument');
-    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>['chat_id'=>TELEGRAM_CHAT_ID,'document'=>new CURLFile($path,'application/octet-stream',$name),'caption'=>'MikroTik backup: '.$name],CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>15,CURLOPT_TIMEOUT=>180,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
+    $ch=curl_init('https://api.telegram.org/bot'.$tg['bot_token'].'/sendDocument');
+    curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>['chat_id'=>$tg['chat_id'],'document'=>new CURLFile($path,'application/octet-stream',$name),'caption'=>'MikroTik backup: '.$name],CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>15,CURLOPT_TIMEOUT=>180,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
     $response=curl_exec($ch); $curlError=curl_error($ch); $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch); $result=is_string($response)?json_decode($response,true):null;
     if ($curlError==='' && $http>=200 && $http<300 && is_array($result) && ($result['ok']??false)===true) {
         $state[$name]=['status'=>'sent','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'sent_at'=>gmdate('c')];
@@ -96,6 +119,26 @@ function render_panel(): void {
             if (!verify_panel_password($old)) $_SESSION['flash']=['ok'=>false,'message'=>'CURRENT_PASSWORD_INVALID'];
             elseif (strlen($new)<12) $_SESSION['flash']=['ok'=>false,'message'=>'PASSWORD_TOO_SHORT'];
             else { $st=load_state(); $salt=bin2hex(random_bytes(16)); $st['_panel_password']=['salt'=>$salt,'hash'=>hash_pbkdf2('sha1',$new,hex2bin($salt),200000,64),'changed_at'=>gmdate('c')]; if(save_state($st)) $_SESSION['flash']=['ok'=>true,'message'=>'PASSWORD_UPDATED']; else $_SESSION['flash']=['ok'=>false,'message'=>'STATE_SAVE_FAILED']; }
+        } elseif ($action==='telegram_settings') {
+            $current=telegram_settings();
+            $token=trim((string)($_POST['bot_token']??'')); $chat=trim((string)($_POST['chat_id']??''));
+            if ($token==='') $token=$current['bot_token'];
+            if (!valid_telegram_settings($token,$chat)) $_SESSION['flash']=['ok'=>false,'message'=>'TELEGRAM_SETTINGS_INVALID'];
+            else {
+                $test=telegram_api($token,'getMe');
+                if (!$test['ok']) $_SESSION['flash']=['ok'=>false,'message'=>'TELEGRAM_TOKEN_INVALID'];
+                else {
+                    $st=load_state(); $st['_telegram_settings']=['bot_token'=>$token,'chat_id'=>$chat,'updated_at'=>gmdate('c')];
+                    $_SESSION['flash']=save_state($st)?['ok'=>true,'message'=>'TELEGRAM_SETTINGS_SAVED']:['ok'=>false,'message'=>'STATE_SAVE_FAILED'];
+                }
+            }
+        } elseif ($action==='telegram_test') {
+            $tg=telegram_settings();
+            if (!valid_telegram_settings($tg['bot_token'],$tg['chat_id'])) $_SESSION['flash']=['ok'=>false,'message'=>'TELEGRAM_NOT_CONFIGURED'];
+            else {
+                $test=telegram_api($tg['bot_token'],'sendMessage',['chat_id'=>$tg['chat_id'],'text'=>'ATD MikroTik Backup Studio: Telegram connection test successful.']);
+                $_SESSION['flash']=$test['ok']?['ok'=>true,'message'=>'TELEGRAM_TEST_OK']:['ok'=>false,'message'=>'TELEGRAM_TEST_FAILED'];
+            }
         }
         header('Location: '.$_SERVER['PHP_SELF']); exit;
     }
@@ -113,6 +156,9 @@ function render_panel(): void {
     echo '<section class="welcome-strip"><div class="welcome-copy"><span class="eyebrow">ATD BACKUP CENTER</span><h2>'.esc($t['welcome']).' 👋</h2><p>'.esc($t['secure']).'</p></div><div class="welcome-art" aria-hidden="true">'.icon_svg('cloud').'</div></section>';
     echo '<section class="stats-grid"><article class="stat-card"><span class="stat-icon blue">'.icon_svg('files').'</span><span class="stat-label">'.esc($t['files']).'</span><strong>'.count($files).'</strong><small>'.esc($t['path']).': <code>'.esc(BACKUP_DIR).'</code></small></article><article class="stat-card"><span class="stat-icon green">'.icon_svg('send').'</span><span class="stat-label">'.esc($t['sent']).'</span><strong>'.$sentCount.'</strong><small>'.($isEn?'Successful deliveries':'ارسال‌های موفق ثبت‌شده').'</small></article><article class="stat-card"><span class="stat-icon orange">'.icon_svg('alert').'</span><span class="stat-label">'.esc($t['failed']).'</span><strong>'.$failedCount.'</strong><small>'.($isEn?'Files needing attention':'فایل‌های نیازمند بررسی').'</small></article><article class="stat-card"><span class="stat-icon purple">'.icon_svg('database').'</span><span class="stat-label">'.esc($t['storage']).'</span><strong>'.esc(format_bytes($totalBytes)).'</strong><small>'.($isEn?'Combined backup size':'مجموع حجم بکاپ‌ها').'</small></article></section>';
     echo '<section class="files-panel password-panel"><div class="panel-heading"><div><h2>'.icon_svg('shield').' '.esc($t['password']).'</h2><p>'.($isEn?'Use a strong password with at least 12 characters.':'برای امنیت بیشتر، رمز قوی با حداقل ۱۲ نویسه انتخاب کنید.').'</p></div></div><form method="post" class="password-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="password"><label>'.esc($t['old']).'<input type="password" name="old_password" required autocomplete="current-password"></label><label>'.esc($t['new']).'<input type="password" name="new_password" minlength="12" required autocomplete="new-password"></label><button class="btn btn-primary" type="submit">'.esc($t['save']).'</button></form></section>';
+    $tg=telegram_settings(); $tgConfigured=valid_telegram_settings($tg['bot_token'],$tg['chat_id']);
+    $tgChatDisplay=$tg['chat_id'];
+    echo '<section class="files-panel telegram-panel"><div class="panel-heading"><div><h2>'.icon_svg('send').' '.esc($isEn?'Telegram delivery settings':'تنظیمات اتصال تلگرام').'</h2><p>'.esc($isEn?'Configure or replace your bot credentials here; the generator no longer asks for them.':'توکن ربات و چت مقصد را اینجا وارد یا هر زمان لازم شد تغییر دهید؛ جنراتور دیگر این اطلاعات را نمی‌پرسد.').'</p></div><span class="status-pill '.($tgConfigured?'status-sent':'status-pending').'"><i></i>'.esc($tgConfigured?($isEn?'Configured':'تنظیم‌شده'):($isEn?'Setup required':'نیازمند تنظیم')).'</span></div><div class="telegram-guides"><article class="guide-card"><span class="guide-step">01</span><h3>'.esc($isEn?'Get a Bot Token':'دریافت Bot Token').'</h3><p>'.($isEn?'Open Telegram and message @BotFather. Run /newbot (or select your existing bot), then copy its API token. Keep it secret.':'در تلگرام به @BotFather پیام بدهید؛ دستور /newbot را اجرا کنید یا ربات قبلی را انتخاب کنید و API Token را کپی کنید. توکن را محرمانه نگه دارید.').'</p><a class="guide-link" href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer">@BotFather ↗</a></article><article class="guide-card"><span class="guide-step">02</span><h3>'.esc($isEn?'Find your Chat ID':'پیدا کردن Chat ID').'</h3><p>'.($isEn?'Open @userinfobot and press Start. Copy the numeric ID it shows. For a group, add your bot to the group and use that group’s ID instead.':'به @userinfobot پیام بدهید و Start را بزنید؛ عددی که نمایش می‌دهد Chat ID شماست. برای گروه، ربات را به گروه اضافه کنید و شناسه همان گروه را وارد کنید.').'</p><a class="guide-link" href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer">@userinfobot ↗</a></article></div><form method="post" class="telegram-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="telegram_settings"><label>'.esc($isEn?'Bot Token':'توکن ربات (Bot Token)').'<input type="password" name="bot_token" autocomplete="new-password" placeholder="'.esc($tgConfigured?($isEn?'Leave blank to keep current token':'برای حفظ توکن فعلی خالی بگذارید'):($isEn?'Paste token from @BotFather':'توکن دریافتی از BotFather را وارد کنید')).'"><small>'.esc($isEn?'Tokens are stored on the server and never displayed back.':'توکن در سرور ذخیره می‌شود و دوباره به‌صورت متن نمایش داده نمی‌شود.').'</small></label><label>'.esc($isEn?'Destination Chat ID':'شناسه مقصد (Chat ID)').'<input type="text" name="chat_id" required inputmode="numeric" pattern="-?[0-9]{1,20}" value="'.esc($tgChatDisplay).'" placeholder="'.esc($isEn?'e.g. 123456789 or -100…':'مثلاً 123456789 یا -100…').'"><small>'.esc($isEn?'Numeric IDs only; group IDs are often negative.':'شناسه عددی؛ شناسه گروه‌ها معمولاً منفی است.').'</small></label><div class="telegram-actions"><button class="btn btn-primary" type="submit">'.esc($isEn?'Save Telegram settings':'ذخیره تنظیمات تلگرام').'</button></div></form><form method="post" class="telegram-test-form"><input type="hidden" name="csrf" value="'.esc($csrf).'"><input type="hidden" name="action" value="telegram_test"><button class="btn btn-ghost" type="submit" '.(!$tgConfigured?'disabled':'').'>'.icon_svg('send').' '.esc($isEn?'Send test message':'ارسال پیام آزمایشی').'</button><small>'.esc($isEn?'Sends one visible test message to the configured chat.':'یک پیام آزمایشی واقعی به چت تنظیم‌شده ارسال می‌کند.').'</small></form></section>';
     echo '<section class="files-panel"><div class="panel-heading"><div><h2>'.icon_svg('files').' '.esc($isEn?'Your backups':'فایل‌های بکاپ شما').'</h2><p>'.($isEn?'Review recent backups and Telegram delivery status.':'وضعیت فایل‌ها و ارسال تلگرام را بررسی کنید.').'</p></div><div class="panel-tools"><label class="search-box">'.icon_svg('search').'<input id="backupSearch" type="search" placeholder="'.esc($t['search']).'" autocomplete="off"></label><button class="btn btn-primary" type="button" onclick="location.reload()">'.icon_svg('refresh').' <span>'.esc($t['refresh']).'</span></button></div></div><div class="table-wrap"><table id="backupTable"><thead><tr><th>'.esc($t['name']).'</th><th>'.esc($t['size']).'</th><th>'.esc($t['date']).'</th><th>'.esc($t['status']).'</th><th>'.esc($t['actions']).'</th></tr></thead><tbody>';
     foreach ($files as $f) { $n=basename($f); $st=$state[$n]??[]; $status=(string)($st['status']??'pending'); $statusClass=$status==='sent'?'status-sent':($status==='failed'?'status-failed':'status-pending'); $statusText=$status==='sent'?$t['sent_status']:($status==='failed'?$t['failed_status']:$t['pending']); echo '<tr data-search="'.esc(strtolower($n)).'"><td><div class="file-name"><span class="file-icon">'.icon_svg('file').'</span><span><strong>'.esc($n).'</strong><small>'.esc($isEn?'MikroTik backup file':'فایل پشتیبان میکروتیک').'</small></span></div></td><td class="nowrap">'.esc(format_bytes((int)filesize($f))).'</td><td class="nowrap">'.esc(date('Y-m-d H:i',filemtime($f))).'</td><td><span class="status-pill '.$statusClass.'"><i></i>'.esc($statusText).'</span></td><td><div class="row-actions"><form method="post" class="inline-action"><input type="hidden" name="csrf" value="'.esc($csrf).'"/><input type="hidden" name="action" value="send"/><input type="hidden" name="file" value="'.esc($n).'"/><button class="icon-btn" type="submit" title="'.esc($t['send']).'" aria-label="'.esc($t['send']).'">'.icon_svg('send').'</button></form><form method="post" class="inline-action" onsubmit="return confirm(&quot;'.esc($t['confirm']).'&quot;)"><input type="hidden" name="csrf" value="'.esc($csrf).'"/><input type="hidden" name="action" value="delete"/><input type="hidden" name="file" value="'.esc($n).'"/><button class="icon-btn danger" type="submit" title="'.esc($t['delete']).'" aria-label="'.esc($t['delete']).'">'.icon_svg('trash').'</button></form></div></td></tr>'; }
     if (!$files) echo '<tr><td colspan="5"><div class="empty-state">'.icon_svg('folder-empty').'<strong>'.esc($t['empty']).'</strong></div></td></tr>';
@@ -177,11 +223,11 @@ $state = load_state();
 if (isset($state[$name]) && ($state[$name]['sha256'] ?? '') === $hash && ($state[$name]['status'] ?? '') === 'sent') {
     http_response_code(200); exit('TELEGRAM_OK'); // Idempotent success: never send the same version twice.
 }
-$ch = curl_init('https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendDocument');
+$ch = curl_init('https://api.telegram.org/bot' . $tg['bot_token'] . '/sendDocument');
 curl_setopt_array($ch, [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => [
-        'chat_id' => TELEGRAM_CHAT_ID,
+        'chat_id' => $tg['chat_id'],
         'document' => new CURLFile($path, 'application/octet-stream', $name),
         'caption' => 'MikroTik backup: ' . $name
     ],
