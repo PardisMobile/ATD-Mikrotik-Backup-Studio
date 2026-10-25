@@ -501,8 +501,6 @@ exit('TELEGRAM_FAILED');
     # Keep customer-specific values separate from the versioned PHP application code.
     $phpTemplate = $php
     $phpHash = Get-Sha256Text $phpTemplate
-    $cssHash = Get-Sha256Text $css
-    $jsHash = Get-Sha256Text $js
     $configPhp = @"
 <?php
 declare(strict_types=1);
@@ -545,9 +543,10 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
   if(search)search.addEventListener('input',function(){const q=this.value.trim().toLocaleLowerCase();document.querySelectorAll('#backupTable tbody tr[data-search]').forEach(function(row){row.hidden=!row.dataset.search.toLocaleLowerCase().includes(q)})});
 })();
 '@
-    [System.IO.File]::WriteAllText((Join-Path $outDir 'panel.css'), $css, [System.Text.UTF8Encoding]::new($false))
-    [System.IO.File]::WriteAllText((Join-Path $outDir 'panel.js'), $js, [System.Text.UTF8Encoding]::new($false))
 }
+
+    $cssHash = Get-Sha256Text $css
+    $jsHash = Get-Sha256Text $js
 
     $installServer = @'
 #!/usr/bin/env bash
