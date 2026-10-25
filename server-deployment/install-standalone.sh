@@ -88,7 +88,30 @@ for n in p:
 PY
 }
 # Preserve allocated ports on repeat runs. Avoid breaking a running deployment with a new URL.
-if [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+
+# Preserve allocated ports on repeat runs. Avoid breaking a running deployment with a new URL.
+if [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+$' "$TLS/ports.env" && grep -Eq '^BACKEND_PORT=[0-9]+$' "$TLS/ports.env"; then
+  # shellcheck disable=SC1090
+  source "$TLS/ports.env"
+else
+  PUBLIC_PORT=$(sed -n 's/^const PUBLIC_PORT = \\([0-9]\\+\\);$/\\1/p' "$SRC/config.php" | head -n1)
+  [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 ]] || { echo 'Missing/invalid PUBLIC_PORT in generated configuration.' >&2; exit 7; }
+  python3 - "$PUBLIC_PORT" <<'PYPORT'
+import socket,sys
+port=int(sys.argv[1])
+s=socket.socket()
+try:
+    s.bind(('0.0.0.0',port))
+except OSError:
+    print(f'Configured public port {port} is already in use. Choose another port in the Windows generator.',file=sys.stderr)
+    raise SystemExit(1)
+finally:
+    s.close()
+PYPORT
+  BACKEND_PORT=$(freeport 2000 19999)
+  [[ -n "$BACKEND_PORT" ]] || { echo 'No free backend port found.' >&2; exit 7; }
+  printf 'PUBLIC_PORT=%s\\nBACKEND_PORT=%s\\n' "$PUBLIC_PORT" "$BACKEND_PORT" > "$TLS/ports.env"
+  chmod 0600 "$TLS/ports.env"
+fi
 [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 && "$BACKEND_PORT" =~ ^[0-9]+$ && "$BACKEND_PORT" -ge 2000 && "$BACKEND_PORT" -le 19999 ]] || { echo 'Invalid stored port configuration.' >&2; exit 7; }
 IP=$(hostname -I 2>/dev/null | awk '{print $1}'); [[ -n "$IP" ]] || IP=127.0.0.1
 if [[ ! -s "$TLS/server.crt" || ! -s "$TLS/server.key" ]]; then
