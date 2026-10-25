@@ -88,10 +88,11 @@ for n in p:
 PY
 }
 # Preserve allocated ports on repeat runs. Avoid breaking a running deployment with a new URL.
-# Preserve allocated ports on repeat runs. Avoid breaking a running deployment with a new URL.
+REQUESTED_PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;' "$SRC/config.php")
 if [[ -s "$TLS/ports.env" ]] && grep -Eq '^PUBLIC_PORT=[0-9]+$' "$TLS/ports.env" && grep -Eq '^BACKEND_PORT=[0-9]+$' "$TLS/ports.env"; then
   # shellcheck disable=SC1090
   source "$TLS/ports.env"
+  [[ "$PUBLIC_PORT" == "$REQUESTED_PUBLIC_PORT" ]] || { echo "The installed panel uses port $PUBLIC_PORT, but this generated package expects $REQUESTED_PUBLIC_PORT. Re-run the Windows generator using the existing port." >&2; exit 7; }
 else
   PUBLIC_PORT=$(php -r 'require $argv[1]; echo PUBLIC_PORT;' "$SRC/config.php")
   [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 ]] || { echo 'Missing/invalid PUBLIC_PORT in generated configuration.' >&2; exit 7; }
@@ -170,7 +171,7 @@ install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backu
 FW="No firewall rules were changed. If remote access is required, allow TCP $PUBLIC_PORT in the host/provider firewall after reviewing existing policy."
 
 echo; echo 'ATD MikroTik Backup Studio installed.'
-echo "URL: https://$IP:$PUBLIC_PORT/"
+echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"
 echo 'Certificate: self-signed; browser warning expected, TLS traffic is encrypted.'
 echo "Firewall: $FW"
 echo "Backup directory: $BACKUP_DIR"
