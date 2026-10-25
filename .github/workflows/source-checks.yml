@@ -96,10 +96,6 @@ jobs:
               raise SystemExit("The single Telegram connection test must send the newest existing backup file")
           if "sendMessage" in php or 'value="send"' in php:
               raise SystemExit("Do not add a text-only test or per-file send buttons")
-          if "const BACKUP_SCHEDULE_TIMES = [$schedulePhp];" not in generated_config:
-              raise SystemExit("Generated private config must persist the Windows-selected backup times")
-          if "const TELEGRAM_DELAY_MINUTES = 2;" not in generated_config:
-              raise SystemExit("Generated private config must define the default Telegram delay")
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
           for script in (runtime, updater):
@@ -114,6 +110,10 @@ jobs:
           config_start = source.index("$configPhp = @\"")
           config_end = source.index("\n\"@", config_start)
           generated_config = source[config_start:config_end]
+          if "const BACKUP_SCHEDULE_TIMES = [$schedulePhp];" not in generated_config:
+              raise SystemExit("Generated private config must persist the Windows-selected backup times")
+          if "const TELEGRAM_DELAY_MINUTES = 2;" not in generated_config:
+              raise SystemExit("Generated private config must define the default Telegram delay")
           if "TRIGGER_TOKEN" in generated_config or "RELAY_TOKEN" in generated_config:
               raise SystemExit("New private configs must not depend on RouterOS callback tokens")
           if "const TELEGRAM_BOT_TOKEN = '';" not in generated_config or "const TELEGRAM_CHAT_ID = '';" not in generated_config:
