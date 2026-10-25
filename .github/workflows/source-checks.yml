@@ -40,4 +40,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check installer syntax
-        run: bash -n server-deployment/install-server.sh
+        run: bash -n server-deployment/install-standalone.sh
