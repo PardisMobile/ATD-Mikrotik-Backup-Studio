@@ -65,3 +65,37 @@ To update an existing installation, run `sudo atd-mikrotik-backup-update`. The u
 - The panel runs under a dedicated service account. The installer grants it access to the configured backup directory; this is separate from the existing SFTP account used by the router to upload files.
 - The generated `install.sh` contains a base64-encoded configuration payload. Base64 is not encryption; keep the file private and transfer it securely.
 - GitHub Actions/static checks do not replace a live end-to-end test with a real MikroTik, SFTP transfer, and Telegram bot. The project must not be considered production-ready until that flow has been tested on a disposable Linux server. See `docs/TEST-REPORT.md` for verification status.
+
+
+## Project Context for Continued Development
+
+**Source of truth:** work directly on `main`. Do not create branches or pull requests unless the owner explicitly asks. Do not force-push or delete branches as a substitute for reviewing their changes.
+
+### Current implementation snapshot (2026-10-25)
+- Current reviewed `main` head before this context update: `c7724376a5a2e4fde77268acb9250ce1755e9de4`.
+- Windows PowerShell generator: `windows-client/Generate-MikroTik-Backup.ps1`.
+- Canonical server panel: `server-deployment/send-backup.php`, `panel.css`, `panel.js`, and `cron-helper.sh`. The generator embeds these assets; CI checks byte-for-byte synchronization (ignoring trailing line endings).
+- Telegram credentials are configured through the authenticated web panel, not prompted for by the Windows generator. The single Telegram connection test sends the newest existing backup file; it is not a text-only test.
+- RouterOS continues to create and upload backups through SFTP; RouterOS does not call Telegram or the PHP panel.
+- Router backup schedule is selected in the generator and saved in private config. The panel manages Linux-side Telegram delivery schedule and delay through a root-owned Cron apply worker.
+- New panel passwords require at least 8 characters; the Windows generator asks for confirmation and retries after mismatch/too-short input.
+- Installer and updater are `server-deployment/install-standalone.sh` and `server-deployment/update-standalone.sh`.
+
+### Branch reconciliation
+- `fix/telegram-schedule-and-connection-test` contains 25 commits after common base `15022946ec458758eff516968ee1cfcce7f673e3`; `main` contains its own 8 commits after that same base. The histories are divergent, so do not merge blindly or delete the branch until every unique change has been reviewed.
+- The current `main` has the core files and implementation invariants from that branch, plus the newer 8-character password policy and generator retry/confirmation changes. Recent comparison showed matching workflow, installer, updater, and test report; expected differences include password text/policy and generator guidance.
+- `fix/panel-password-confirmation-and-generator-help` was created without the owner's permission. Do not create additional branches. Review and clean up both extra branches only after reconciliation; use `main` as the sole working branch.
+
+### Verification status — do not overstate
+- The source-check workflow defines PHP lint (canonical and embedded PHP), JavaScript/CSS syntax checks, canonical asset consistency, generated bootstrap shell syntax, implementation invariants, Bash syntax/ShellCheck, and Windows PowerShell parser validation.
+- As of the review above, the GitHub connector returned no combined status checks for main commit `c7724376a5a2e4fde77268acb9250ce1755e9de4`; this is **not evidence of a pass**. Its workflow-run wrapper only returns pull-request-triggered runs and returned none for that main commit, so inspect GitHub Actions directly or trigger a workflow run before release.
+- Real-server end-to-end tests remain outstanding: clean install, rerun/preservation, updater and rollback, RouterOS 7 scheduled SFTP upload, Telegram delivery/deduplication/retries, panel schedule changes, password change, and TLS/firewall behavior.
+- Do not claim production readiness until the latest CI is green and end-to-end tests are documented in `docs/TEST-REPORT.md`.
+
+### Instructions for the next ChatGPT session
+1. Read this section and `docs/TEST-REPORT.md` first.
+2. Fetch the live `main` head before editing; do not rely on old SHAs if main moved.
+3. Work directly on `main`; commit changes directly to `main`, one coherent fix at a time.
+4. Check embedded PHP/CSS/JS/Cron helper against canonical files after any relevant change.
+5. Run or inspect actual CI and report exact evidence; never infer a pass from missing status checks.
+6. Inspect unique commits and file diffs on both extra branches, reconcile useful work to `main`, and only then remove obsolete branches if repository permissions allow.
