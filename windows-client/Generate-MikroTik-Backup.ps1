@@ -260,7 +260,6 @@ if ($useTelegram) {
 
     $php = @'
 <?php
-<?php
 declare(strict_types=1);
 require_once '/etc/atd-mikrotik-backup-studio/config.php';
 const STABILITY_CHECKS = 3;
