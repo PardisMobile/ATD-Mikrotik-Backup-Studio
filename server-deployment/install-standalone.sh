@@ -64,7 +64,6 @@ else
   echo 'Existing private configuration found; preserving first-run values and secrets.'
 fi
 php -l "$TLS/config.php" >/dev/null || { echo 'Private configuration syntax check failed.' >&2; exit 8; }
-grep -q "const RELAY_TOKEN" "$TLS/config.php" || { echo 'Private configuration is missing RELAY_TOKEN.' >&2; exit 8; }
 grep -q "const BACKUP_DIR" "$TLS/config.php" || { echo 'Private configuration is missing BACKUP_DIR.' >&2; exit 8; }
 
 for f in send-backup.php panel.css panel.js; do
