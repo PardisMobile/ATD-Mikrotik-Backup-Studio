@@ -570,12 +570,12 @@ for f in send-backup.php panel.css panel.js; do
   if [[ -e "$TARGET/$f" ]]; then cp -p -- "$TARGET/$f" "$TARGET/$f.atd-backup"; fi
   install -m 0644 "$SRC/$f" "$TARGET/$f"
 done
-chown root:"$WEBUSER" "$TARGET/send-backup.php"
-chmod 0640 "$TARGET/send-backup.php"
-# Find a common web worker account without modifying global web-server configuration.
+# Find a common web worker account before applying ownership or ACLs.
 WEBUSER=""
 for u in www-data nginx apache; do if id "$u" >/dev/null 2>&1; then WEBUSER="$u"; break; fi; done
 if [[ -z "$WEBUSER" ]]; then echo "Installed files, but could not identify PHP/web worker user. Configure file access manually; do not chmod 777." >&2; exit 8; fi
+chown root:"$WEBUSER" "$TARGET/send-backup.php"
+chmod 0640 "$TARGET/send-backup.php"
 install -d -o "$WEBUSER" -g "$WEBUSER" -m 0700 /var/lib/atd-mikrotik-backup-studio
 # Extract only the configured BACKUP_DIR constant from generated PHP source.
 BACKUP_DIR="$(sed -n "s/^const BACKUP_DIR = '\(.*\)';$/\1/p" "$TARGET/send-backup.php" | head -n1)"
@@ -599,13 +599,14 @@ cat <<EOF
 
 ATD files installed into: $TARGET
 Panel URL path: /$(basename "$TARGET")/send-backup.php
-Use the HTTPS domain already configured for this website. No port or global vhost was changed.
+Panel URL: https://YOUR-DOMAIN/$(basename "$TARGET")/send-backup.php
+Replace YOUR-DOMAIN with the domain already mapped to this website/document root. No port or global vhost was changed.
 Backup directory read/delete access was granted only to the detected web worker user ($WEBUSER), because the panel supports deleting selected backups.
 If this server uses a custom PHP-FPM pool user, review the ACL before relying on the panel.
 
 GitHub server asset updates (no need to rerun the generator):
   sudo bash install-server.sh --update "$TARGET"
-This updates compatible server assets from the public GitHub repository and preserves the current installed files if validation fails.
+This updates compatible server assets from the public GitHub repository and preserves the current installed files if validation fails. For the generated PHP schema, PHP replacement is deliberately skipped until a schema-compatible migration is published; CSS/JS can still update.
 EOF
 '@
     [System.IO.File]::WriteAllText((Join-Path $outDir 'install-server.sh'), $installServer, [System.Text.UTF8Encoding]::new($false))
