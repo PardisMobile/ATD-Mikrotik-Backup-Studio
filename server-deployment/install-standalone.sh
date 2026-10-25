@@ -230,5 +230,5 @@ echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"
 echo 'Certificate: self-signed; browser warning expected, TLS traffic is encrypted.'
 echo "Firewall: $FW"
 echo "Backup directory: $BACKUP_DIR"
-echo 'Existing web-server configurations and ports were not changed.
-Telegram scan: dedicated cron job runs every minute; RouterOS/SFTP scripts are unchanged.'
+echo 'Existing web-server configurations and ports were not changed.'
+echo 'Telegram scan: dedicated cron job runs every minute; RouterOS/SFTP scripts are unchanged.'
