@@ -4,10 +4,6 @@ set -Eeuo pipefail
 [[ $(id -u) -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 2; }
 SRC=${1:-$(pwd)}
 for f in send-backup.php panel.css panel.js config.php cron-helper.sh; do [[ -f "$SRC/$f" ]] || { echo "Missing generated asset $f in $SRC" >&2; exit 3; }; done
-BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR = '\\(.*\\)';$/\\1/p" "$SRC/config.php" | head -n1)
-[[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ && "$BACKUP_DIR" != / && "$BACKUP_DIR" != /root && "$BACKUP_DIR" != /home && "$BACKUP_DIR" != /etc && "$BACKUP_DIR" != /var && "$BACKUP_DIR" != /usr && "$BACKUP_DIR" != /opt && "$BACKUP_DIR" != /tmp ]] || { echo 'Missing or unsafe BACKUP_DIR in generated config. Use a simple absolute path without spaces.' >&2; exit 4; }
-case "$BACKUP_DIR" in *"/../"*|*/..|*/./*|*/.) echo 'Unsafe backup path.' >&2; exit 4;; esac
-
 # Define an explicit baseline for Ubuntu deployments instead of silently implying every release is supported.
 if [[ -r /etc/os-release ]]; then
   . /etc/os-release
@@ -50,7 +46,7 @@ php -r 'exit(extension_loaded("curl") ? 0 : 1);' || { echo 'PHP cURL is required
 
 id atdbackup >/dev/null 2>&1 || useradd --system --home-dir /opt/atd-mikrotik-backup-studio --shell /usr/sbin/nologin atdbackup
 APP=/opt/atd-mikrotik-backup-studio; STATE=/var/lib/atd-mikrotik-backup-studio; TLS=/etc/atd-mikrotik-backup-studio
-mkdir -p "$APP" "$STATE/sessions" "$TLS" "$BACKUP_DIR"
+mkdir -p "$APP" "$STATE/sessions" "$TLS"
 chmod 0750 "$APP"
 chmod 0700 "$STATE" "$STATE/sessions"
 chown -R atdbackup:atdbackup "$STATE"
@@ -73,7 +69,10 @@ else
   echo 'Existing private configuration found; preserving first-run values and secrets.'
 fi
 php -l "$TLS/config.php" >/dev/null || { echo 'Private configuration syntax check failed.' >&2; exit 8; }
-grep -q "const BACKUP_DIR" "$TLS/config.php" || { echo 'Private configuration is missing BACKUP_DIR.' >&2; exit 8; }
+BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR = '\\(.*\\)';$/\\1/p" "$TLS/config.php" | head -n1)
+[[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9._/-]+$ && "$BACKUP_DIR" != / && "$BACKUP_DIR" != /root && "$BACKUP_DIR" != /home && "$BACKUP_DIR" != /etc && "$BACKUP_DIR" != /var && "$BACKUP_DIR" != /usr && "$BACKUP_DIR" != /opt && "$BACKUP_DIR" != /tmp ]] || { echo 'Missing or unsafe BACKUP_DIR in the preserved private configuration. Use a simple absolute path without spaces.' >&2; exit 8; }
+case "$BACKUP_DIR" in *"/../"*|*/..|*/./*|*/.) echo 'Unsafe backup path in private configuration.' >&2; exit 8;; esac
+mkdir -p "$BACKUP_DIR"
 
 for f in send-backup.php panel.css panel.js; do
   if [[ -e "$APP/$f" ]]; then cp -p "$APP/$f" "$APP/$f.backup.$(date +%Y%m%d%H%M%S)"; fi
