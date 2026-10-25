@@ -72,7 +72,7 @@ jobs:
           if 'echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"' not in runtime:
               raise SystemExit("Installer must print the actual panel endpoint")
           config = Path("/tmp/atd-test-config.php")
-          config.write_text("<?php\\nconst PUBLIC_PORT = 24443;\\n", encoding="utf-8")
+          config.write_text("<?php\nconst PUBLIC_PORT = 24443;\n", encoding="utf-8")
           port = subprocess.check_output(
               ["php", "-r", "require $argv[1]; echo PUBLIC_PORT;", str(config)],
               text=True
