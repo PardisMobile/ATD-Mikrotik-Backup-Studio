@@ -59,7 +59,7 @@ Write-Host ''
 
 Write-Host 'Choose destination mode:'
 Write-Host '  1) SFTP only'
-Write-Host '  2) Telegram only (still requires SFTP staging on a server)'
+Write-Host '  2) Telegram delivery with automatic SFTP staging on the configured server'
 Write-Host '  3) SFTP + Telegram'
 do { $mode = Read-Host 'Select 1, 2, or 3' } while ($mode -notin @('1','2','3'))
 
@@ -87,10 +87,12 @@ $panelPath = '/' + $panelFolderName + '/send-backup.php'
 
 $maxUploadMb = '45'
 $panelPassword = ''
+$telegramBotToken = ''
+$telegramChatId = ''
 
 if ($useTelegram) {
     Write-Host ''
-    Write-Host 'Telegram settings will be entered later inside the secure web panel.' -ForegroundColor Cyan
+    Write-Host 'Telegram delivery will be configured automatically from the values collected here.' -ForegroundColor Cyan
     do {
         $publicPortInput = Read-Required 'Public HTTPS panel port (20000-60000; open this TCP port in your provider firewall if needed)' '24443'
         $publicPort = 0
@@ -99,6 +101,10 @@ if ($useTelegram) {
     } while (-not $validPort)
     $panelPassword = Read-SecretText 'Choose initial password for the web management panel'
     if ($panelPassword.Length -lt 12) { throw 'Use a panel password of at least 12 characters.' }
+    $telegramBotToken = Read-SecretText 'Telegram bot token from @BotFather'
+    if ($telegramBotToken -notmatch '^[0-9]{5,}:[A-Za-z0-9_-]{20,}$') { throw 'Telegram bot token format is invalid.' }
+    $telegramChatId = Read-Required 'Telegram destination Chat ID (numeric user or group ID)'
+    if ($telegramChatId -notmatch '^-?[0-9]{1,20}$') { throw 'Telegram Chat ID must be numeric.' }
 }
 
 Write-Host ''
@@ -162,22 +168,7 @@ $userEsc = Escape-RouterString $sftpUser
 $passEsc = Escape-RouterString $sftpPass
 $dirEsc = Escape-RouterString $remoteDir
 
-$telegramBlock = if ($useTelegram) {
-    $relayToken = Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpUser + ":" + $sftpPass)
-    $relayTokenEsc = Escape-RouterString $relayToken
-    @(
-        ':if ($sftpOK) do={'
-        '    :do {'
-        '        /tool fetch url=("https://" . $sftpHost . ":' + $publicPort + '/send-backup.php") http-method=post http-header-field=("X-Backup-Token: ' + $relayTokenEsc + ',Content-Type: application/json") http-data=("{\"file\":\"" . $localFile . "\"}") check-certificate=no output=none keep-result=no'
-        '        :log info ("BACKUP: server notified for Telegram delivery: " . $localFile)'
-        '    } on-error={'
-        '        :log warning ("BACKUP: SFTP succeeded but Telegram notification failed: " . $localFile)'
-        '    }'
-        '}'
-    ) -join [Environment]::NewLine
-} else {
-    '# Telegram disabled by generator choice.'
-}
+$telegramBlock = '# Telegram delivery is handled automatically by the Linux-side cron job; RouterOS only uses SFTP.'
 
 $cleanupCondition = '($backupOK = true) && ($sftpOK = true)'
 
@@ -234,7 +225,7 @@ $routerScript = @"
     }
 }
 
-$(if ($useTelegram) { $telegramBlock } else { '# Telegram disabled by generator choice.' })
+# Telegram delivery is handled by the Linux server; keep RouterOS backup/SFTP workflow unchanged.
 
 $(if ($deleteAfterUpload) {
     @(
@@ -458,33 +449,40 @@ function format_bytes(int $bytes): string {
     return number_format($value, $value<10?1:0).' '.$units[$i];
 }
 
+// Automatic server-side scan. RouterOS and the SFTP workflow do not call this endpoint.
+if (PHP_SAPI === 'cli' && in_array('--scan-backups', $argv ?? [], true)) {
+    $baselinePath = dirname(STATE_FILE) . '/telegram-scan-started-at';
+    $baseline = is_file($baselinePath) ? (int)trim((string)@file_get_contents($baselinePath)) : 0;
+    if ($baseline <= 0) {
+        @file_put_contents($baselinePath, (string)time(), LOCK_EX);
+        @chmod($baselinePath, 0600);
+        fwrite(STDOUT, "ATD Telegram scan baseline initialized; existing files are left untouched.\n");
+        exit(0);
+    }
+    $base = realpath(BACKUP_DIR);
+    if ($base === false || !is_readable($base)) {
+        fwrite(STDERR, "ATD Telegram scan: backup directory is unavailable.\n");
+        exit(2);
+    }
+    foreach (glob($base . DIRECTORY_SEPARATOR . '*.backup') ?: [] as $path) {
+        if (!is_file($path) || !is_readable($path)) continue;
+        $mtime = @filemtime($path);
+        if ($mtime === false || $mtime < $baseline) continue;
+        $name = basename($path);
+        if (!preg_match('/\\A[A-Za-z0-9_. -]+\\.backup\\z/', $name)) continue;
+        [$ok, $message] = send_telegram_file($name, false);
+        if (!$ok && $message !== 'ALREADY_SENT') fwrite(STDERR, "ATD Telegram scan: {$name}: {$message}\n");
+    }
+    exit(0);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'GET' || (!empty($_SESSION['admin']) && $_SERVER['REQUEST_METHOD'] === 'POST') || (!empty($_POST['login']) && $_SERVER['REQUEST_METHOD'] === 'POST')) {
     render_panel();
     exit;
 }
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit('METHOD_NOT_ALLOWED'); }
-// Called by RouterOS only after a successful SFTP upload. Telegram API access stays server-side.
-// Keep RELAY_TOKEN valid for scripts generated by older versions.
-$provided = $_SERVER['HTTP_X_BACKUP_TOKEN'] ?? '';
-$tokenValid = (defined('TRIGGER_TOKEN') && hash_equals((string)TRIGGER_TOKEN, $provided))
-    || (defined('RELAY_TOKEN') && hash_equals((string)RELAY_TOKEN, $provided));
-if (!$tokenValid) { http_response_code(403); exit('FORBIDDEN'); }
-$input = json_decode(file_get_contents('php://input'), true);
-$name = is_array($input) ? ($input['file'] ?? '') : '';
-if (!is_string($name) || basename($name) !== $name || !preg_match('/\\A[A-Za-z0-9_. -]+\\.backup\\z/', $name)) {
-    http_response_code(400); exit('INVALID_FILENAME');
-}
-[$ok, $message] = send_telegram_file($name, false);
-if ($ok) { http_response_code(200); exit('TELEGRAM_OK'); }
-if ($message === 'TELEGRAM_NOT_CONFIGURED') $status = 503;
-elseif ($message === 'FILE_NOT_FOUND') $status = 404;
-elseif ($message === 'FILE_NOT_STABLE') $status = 425;
-elseif ($message === 'FILE_SIZE_REJECTED') $status = 413;
-elseif ($message === 'INVALID_FILENAME') $status = 400;
-else $status = 502;
-http_response_code($status);
-exit($message);
-
+http_response_code(405);
+exit('METHOD_NOT_ALLOWED');
 '@
     # Keep customer-specific values separate from the versioned PHP application code.
     $phpTemplate = $php
@@ -492,9 +490,8 @@ exit($message);
     $configPhp = @"
 <?php
 declare(strict_types=1);
-const TELEGRAM_BOT_TOKEN = '';
-const TELEGRAM_CHAT_ID = '';
-const TRIGGER_TOKEN = '$(Get-Sha256Text ("ATD-MikroTik-Backup-Studio:" + $sftpUser + ":" + $sftpPass))';
+const TELEGRAM_BOT_TOKEN = '$(Escape-PhpSingle $telegramBotToken)';
+const TELEGRAM_CHAT_ID = '$(Escape-PhpSingle $telegramChatId)';
 const PANEL_PASSWORD_SALT = '$passwordSalt';
 const PANEL_PASSWORD_HASH = '$panelPasswordHash';
 const BACKUP_DIR = '$pathPhp';
