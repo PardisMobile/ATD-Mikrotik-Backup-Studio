@@ -357,6 +357,8 @@ function telegram_api(string $token, string $method, array $fields = []): array 
         'http'=>$http, 'error'=>$error, 'data'=>is_array($data)?$data:[]];
 }
 function send_telegram_file(string $name, bool $force = false): array {
+    $tg = telegram_settings();
+    if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) return [false, 'TELEGRAM_NOT_CONFIGURED'];
     $base = realpath(BACKUP_DIR);
     if ($base === false || !preg_match('/\A[A-Za-z0-9_. -]+\.backup\z/', $name) || basename($name) !== $name) return [false, 'INVALID_FILENAME'];
     $path = realpath($base . DIRECTORY_SEPARATOR . $name);
@@ -482,6 +484,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' || (!empty($_SESSION['admin']) && $_SER
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') { http_response_code(405); exit('METHOD_NOT_ALLOWED'); }
 $provided = $_SERVER['HTTP_X_BACKUP_TOKEN'] ?? '';
 if (!hash_equals(RELAY_TOKEN, $provided)) { http_response_code(403); exit('FORBIDDEN'); }
+$tg = telegram_settings();
+if (!valid_telegram_settings($tg['bot_token'], $tg['chat_id'])) { http_response_code(503); exit('TELEGRAM_NOT_CONFIGURED'); }
 $input = json_decode(file_get_contents('php://input'), true);
 $name = is_array($input) ? ($input['file'] ?? '') : '';
 if (!is_string($name) || !preg_match('/\A[A-Za-z0-9_.-]+-\d{4}[A-Za-z]{3}\d{2}-\d{6}\.backup\z/', $name)) {
