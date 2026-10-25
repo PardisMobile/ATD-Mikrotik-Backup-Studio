@@ -16,6 +16,8 @@ jobs:
       - name: Check PHP syntax
         run: |
           php -l server-deployment/send-backup.php
+          bash -n server-deployment/install-standalone.sh
+          bash -n server-deployment/update-standalone.sh
           python3 - <<'PY'
           from pathlib import Path
           source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
@@ -35,6 +37,38 @@ jobs:
           Path("/tmp/atd-generated-panel-lint.php").write_text(php, encoding="utf-8")
           PY
           php -l /tmp/atd-generated-panel-lint.php
+      - name: Verify canonical assets and generated bootstrap
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess
+          source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
+          def here_string(name):
+              start = source.index(f"${name} = @'") + len(f"${name} = @'\\n")
+              end = source.index("\\n'@", start)
+              return source[start:end]
+          for name, path in (("php", "server-deployment/send-backup.php"),
+                             ("css", "server-deployment/panel.css"),
+                             ("js", "server-deployment/panel.js")):
+              embedded = here_string(name).rstrip("\\r\\n")
+              canonical = Path(path).read_text(encoding="utf-8").rstrip("\\r\\n")
+              if embedded != canonical:
+                  raise SystemExit(f"Embedded {name} template differs from canonical {path}")
+          installer = here_string("installServer")
+          for key, value in {
+              "__PHP_SHA256__": "0" * 64,
+              "__CSS_SHA256__": "1" * 64,
+              "__JS_SHA256__": "2" * 64,
+              "__CONFIG_B64__": "PD9waHA7",
+          }.items():
+              installer = installer.replace(key, value)
+          path = Path("/tmp/atd-generated-bootstrap.sh")
+          path.write_text(installer, encoding="utf-8")
+          subprocess.run(["bash", "-n", str(path)], check=True)
+          if "send-backup.php panel.css panel.js" in installer:
+              raise SystemExit("Bootstrap must not require separate panel files from the user")
+          print("Canonical PHP/CSS/JS templates match; generated bootstrap syntax is valid.")
+          PY
   shell-check:
     runs-on: ubuntu-latest
     steps:
