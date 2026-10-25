@@ -48,7 +48,12 @@ php -r 'exit(extension_loaded("curl") ? 0 : 1);' || { echo 'PHP cURL is required
 
 id atdbackup >/dev/null 2>&1 || useradd --system --home-dir /opt/atd-mikrotik-backup-studio --shell /usr/sbin/nologin atdbackup
 APP=/opt/atd-mikrotik-backup-studio; STATE=/var/lib/atd-mikrotik-backup-studio; TLS=/etc/atd-mikrotik-backup-studio
-mkdir -p "$APP" "$STATE" "$TLS" "$BACKUP_DIR"; chmod 0750 "$APP"; chmod 0700 "$STATE" "$TLS"; chown atdbackup:atdbackup "$STATE"
+mkdir -p "$APP" "$STATE" "$TLS" "$BACKUP_DIR"
+chmod 0750 "$APP"
+chmod 0700 "$STATE"
+chown atdbackup:atdbackup "$STATE"
+chown root:atdbackup "$TLS"
+chmod 0750 "$TLS"
 # Keep configuration and delivery state outside the versioned application directory.
 if [[ ! -s "$TLS/config.php" ]]; then
   [[ -s "$SRC/config.php" ]] || { echo 'Missing generated private configuration.' >&2; exit 8; }
