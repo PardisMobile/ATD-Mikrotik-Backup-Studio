@@ -155,6 +155,11 @@ $outDir = Join-Path $PSScriptRoot 'generated-output'
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 $obsoleteSchedulerFile = Join-Path $outDir 'scheduler-commands.txt'
 if (Test-Path $obsoleteSchedulerFile) { Remove-Item $obsoleteSchedulerFile -Force }
+# Remove obsolete separately generated panel assets from prior runs; the server now fetches verified code from GitHub.
+foreach ($obsolete in @('send-backup.php', 'panel.css', 'panel.js')) {
+    $obsoletePath = Join-Path $outDir $obsolete
+    if (Test-Path $obsoletePath -PathType Leaf) { Remove-Item $obsoletePath -Force }
+}
 
 $routerName = 'RouterOS Identity is read dynamically on the router'
 $hostEsc = Escape-RouterString $sftpHost
@@ -631,6 +636,7 @@ INSTALL
 4. Paste paste-into-routeros-terminal.txt into MikroTik Terminal.
 5. Open the HTTPS URL printed by the installer and sign in with the initial panel password.
 
+The server installer is generated for Telegram/panel mode. In SFTP-only mode, no panel installer is needed; use the RouterOS output and create-sftp-directory.txt as required.
 The installer uses ATD-specific paths and services. It does not edit existing Nginx/Apache configuration. A self-signed TLS certificate may cause a browser warning. Keep install.sh private because it contains the initial configuration.
 "@
 [System.IO.File]::WriteAllText((Join-Path $outDir 'README.txt'), $readme, [System.Text.UTF8Encoding]::new($false))
