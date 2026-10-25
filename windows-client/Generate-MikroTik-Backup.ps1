@@ -67,11 +67,15 @@ $sftpPort = '22'
 Write-Host 'SFTP port is fixed to 22.' -ForegroundColor DarkGray
 $sftpUser = Read-Required 'SFTP username'
 $sftpPass = Read-SecretText 'SFTP password (will be written into the RouterOS script; use a dedicated restricted account)'
-$remoteDir = Read-Required 'Remote directory as seen by SFTP (create this folder first in Termius)' '/root/uploads'
+$remoteDir = Read-Required 'Remote directory as seen by SFTP (create this private folder first in Termius)' '/root/uploads'
 $remoteDir = $remoteDir.TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($remoteDir)) { $remoteDir = '/' }
 # Relative names resolve under /root, as documented for this product.
 if (-not $remoteDir.StartsWith('/')) { $remoteDir = '/root/' + $remoteDir.TrimStart('/') }
+# Keep backup files in the configured private SFTP directory; derive the panel URL folder from its basename.
+$panelFolderName = Split-Path -Leaf $remoteDir.TrimEnd('/')
+if ([string]::IsNullOrWhiteSpace($panelFolderName) -or $panelFolderName -in @('.', '..') -or $panelFolderName -notmatch '^[A-Za-z0-9_-]{1,64}$') { throw 'Remote directory must end with a simple folder name, e.g. /root/uploads or /Upload.' }
+$panelPath = '/' + $panelFolderName + '/send-backup.php'
 
 $relayBaseUrl = ''
 $relayToken = ''
@@ -83,11 +87,11 @@ $panelPassword = ''
 if ($useTelegram) {
     Write-Host ''
     Write-Host 'Telegram setup (only the real Telegram details are requested).' -ForegroundColor Cyan
-    $relayBaseUrl = 'https://' + $sftpHost.Trim() + '/atd-backup/send-backup.php'
-    Write-Host "Default PHP panel/relay URL: $relayBaseUrl" -ForegroundColor Gray
-    $customRelay = Read-Host 'Enter a different HTTPS URL if your web host/domain differs, or press Enter to use this default'
+    $relayBaseUrl = 'https://' + $sftpHost.Trim() + $panelPath
+    Write-Host "Default PHP panel/relay URL (derived from selected SFTP folder): $relayBaseUrl" -ForegroundColor Gray
+    $customRelay = Read-Host 'Enter full HTTPS panel URL if the web host/IP/path differs, or press Enter to use this default'
     if (-not [string]::IsNullOrWhiteSpace($customRelay)) { $relayBaseUrl = $customRelay.Trim() }
-    if ($relayBaseUrl -notmatch '^https://') { throw 'The relay URL must use HTTPS.' }
+    if ($relayBaseUrl -notmatch '^https://[^/]+/.+/send-backup\.php$') { throw 'Enter a full HTTPS URL ending in /<selected-folder>/send-backup.php.' }
     $relayToken = (New-HexRandom 32)
     $telegramBotToken = Read-Required 'Telegram bot token (from @BotFather)'
     $telegramChatId = Read-Required 'Telegram destination chat ID (user, group or channel)'
