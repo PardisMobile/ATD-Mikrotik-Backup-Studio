@@ -1,7 +1,19 @@
-# Validation report
+# Test report and current verification status
 
-The supplied v3 ZIP reports PHP template syntax checks, local panel smoke tests, and `bash -n` validation of the generated installer.
+Last reviewed: 2026-10-25.
 
-Not independently verified in this environment: PowerShell runtime or EXE build, live RouterOS backup and SFTP transfer, live Telegram delivery, production HTTPS/PHP-FPM deployment, or end-to-end local-backup deletion.
+## Verified from repository inspection
+- The repository contains the PHP relay/panel endpoint, CSS, JavaScript, server install helper, Windows launcher/build BAT files, documentation, and a source-check workflow.
+- The optional server update entry point is available as:
+  `sudo bash install-server.sh --update /absolute/path/to/installed/panel`
+- The updater downloads the allowlisted PHP/CSS/JS files over HTTPS, stages them before touching live files, creates a timestamped backup, carries matching customer-specific constants forward, and checks PHP syntax before/after replacement.
+- SFTP remains a separate workflow and is not modified by the updater.
 
-The GitHub-based installer flow is not implemented/verified yet. The supplied package instructions still ask the user to upload generated files manually. The repository is not production-ready until the original client source is synchronized and the complete install flow passes end-to-end testing.
+## Not yet verified
+- No end-to-end execution of the updater on a real Linux web server has been recorded in this report.
+- Telegram delivery, bot token/Chat ID correctness, backup-file stability detection, and the panel login flow still require a real test.
+- The original `windows-client/Generate-MikroTik-Backup.ps1` and `windows-client/AmirTaheri-Backup.ico` are not currently present in the GitHub tree. As a result, the repository cannot yet be claimed as a complete reproducible Windows EXE source package.
+- The GitHub update option has not yet been wired into the original EXE-generated server script because that original PowerShell generator source is missing from the repository. The standalone server update helper is committed, but it is not proof of complete EXE integration.
+
+## Required release gate
+Do not label this release production-ready until the exact PowerShell generator/icon are restored, the generated installer invokes the update option, and tests pass on a clean test server for both SFTP-only and Telegram/panel modes. Verify that updates preserve all customer-specific values and that rollback works after a deliberately invalid staged PHP file.
