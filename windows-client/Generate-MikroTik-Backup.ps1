@@ -68,13 +68,14 @@ $useTelegram = $mode -in @('2','3')
 if ($mode -eq '1') { $useTelegram = $false }
 
 Write-Host ''
-Write-Host 'SFTP destination (required for all modes; Telegram mode uses it as staging). Create the remote folder first in Termius; RouterOS script does not create Linux folders.' -ForegroundColor Cyan
+Write-Host 'SFTP destination (required for all modes). The SFTP host must be this same Linux server where the panel will be installed; the panel reads backups from its local filesystem.' -ForegroundColor Cyan
+Write-Host 'Use the real absolute Linux filesystem path, not a chroot-relative SFTP path. Create/check the folder first; the RouterOS script does not create Linux folders.' -ForegroundColor Yellow
 $sftpHost = Read-Required 'SFTP hostname or IP'
 $sftpPort = '22'
 Write-Host 'SFTP port is fixed to 22.' -ForegroundColor DarkGray
 $sftpUser = Read-Required 'SFTP username'
 $sftpPass = Read-SecretText 'SFTP password (will be written into the RouterOS script; use a dedicated restricted account)'
-$remoteDir = Read-Required 'Remote directory as seen by SFTP (create this private folder first in Termius)' '/root/uploads'
+$remoteDir = Read-Required 'Absolute Linux filesystem path on this server (not a chroot-relative SFTP path)' '/root/uploads'
 $remoteDir = $remoteDir.TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($remoteDir)) { $remoteDir = '/' }
 # Relative names resolve under /root, as documented for this product.
