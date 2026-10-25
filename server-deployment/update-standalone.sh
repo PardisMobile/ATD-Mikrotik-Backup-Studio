@@ -5,21 +5,19 @@ set -Eeuo pipefail
 APP=/opt/atd-mikrotik-backup-studio
 TLS=/etc/atd-mikrotik-backup-studio
 STATE=/var/lib/atd-mikrotik-backup-studio
-BASE='https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment'
 for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installation not found ($path)." >&2; exit 3; }; done
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
-# Remove obsolete ATD-only scanner/worker units from previous releases; the cron job below replaces them.
-LEGACY_UNITS=(
-  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
-  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
-  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
-  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
-)
-for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
-# Preserve delivery baseline and state during updates.
-systemctl daemon-reload
+# Legacy ATD worker cleanup is deferred until the new assets pass validation.
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI is required; no packages were installed.' >&2; exit 4; }
+
+COMMIT_TMP=$(mktemp)
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+  'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$COMMIT_TMP"
+COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$COMMIT_TMP" | sed -n '1p')"
+rm -f -- "$COMMIT_TMP"
+[[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable GitHub source commit; update aborted.' >&2; exit 5; }
+BASE="https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$COMMIT/server-deployment"
 
 TMP=$(mktemp -d /tmp/atd-update.XXXXXX)
 chmod 0700 "$TMP"
@@ -39,6 +37,16 @@ php -l "$TLS/config.php" >/dev/null || { echo 'Existing private configuration is
 grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-backup.php" || { echo 'Downloaded PHP does not use the separate private configuration schema; update aborted.' >&2; exit 6; }
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
 grep -q 'TELEGRAM_NOT_CONFIGURED' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks Telegram setup checks; update aborted.' >&2; exit 6; }
+
+# Do not disable legacy services or touch live files until all replacement assets validate.
+LEGACY_UNITS=(
+  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
+  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
+  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
+  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
+)
+for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
+systemctl daemon-reload
 
 for f in send-backup.php panel.css panel.js; do
   [[ -f "$APP/$f" ]] && cp -p "$APP/$f" "$BACKUP/$f"
