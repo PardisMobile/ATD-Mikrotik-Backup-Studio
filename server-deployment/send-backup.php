@@ -53,8 +53,8 @@ function telegram_settings(): array {
     return ['bot_token'=>$token, 'chat_id'=>$chat];
 }
 function valid_telegram_settings(string $token, string $chat): bool {
-    return (bool)preg_match('/\\A[0-9]{5,}:[A-Za-z0-9_-]{20,}\\z/', $token)
-        && (bool)preg_match('/\\A-?[0-9]{1,20}\\z/', $chat);
+    return (bool)preg_match('/\A[0-9]{5,}:[A-Za-z0-9_-]{20,}\z/', $token)
+        && (bool)preg_match('/\A-?[0-9]{1,20}\z/', $chat);
 }
 function telegram_api(string $token, string $method, array $fields = []): array {
     $ch = curl_init('https://api.telegram.org/bot'.$token.'/'.$method);
