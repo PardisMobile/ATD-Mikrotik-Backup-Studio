@@ -291,6 +291,13 @@ function render_panel(): void {
                 } else $_SESSION['flash']=['ok'=>true,'message'=>'DELIVERY_SCHEDULE_SAVED (Cron applies within one minute)'];
             }
         }
+        if ($action==='telegram_test' && strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH']??''))==='xmlhttprequest') {
+            $flash=$_SESSION['flash']??['ok'=>false,'message'=>'TELEGRAM_TEST_FAILED'];
+            unset($_SESSION['flash']);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok'=>!empty($flash['ok']),'message'=>(string)($flash['message']??'TELEGRAM_TEST_FAILED')], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+            exit;
+        }
         header('Location: '.$_SERVER['PHP_SELF']); exit;
     }
     $csrf=csrf_token();
