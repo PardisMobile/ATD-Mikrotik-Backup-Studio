@@ -291,7 +291,7 @@ function render_panel(): void {
                 } else $_SESSION['flash']=['ok'=>true,'message'=>'DELIVERY_SCHEDULE_SAVED (Cron applies within one minute)'];
             }
         }
-        header('Location: '.($_SERVER['SCRIPT_NAME']??'/send-backup.php')); exit;
+        header('Location: '.$_SERVER['PHP_SELF']); exit;
     }
     $csrf=csrf_token();
     $systemTimezone=detected_system_timezone(); $selectedTimezone=selected_timezone();
