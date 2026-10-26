@@ -26,13 +26,17 @@ $times = is_array($saved) && isset($saved["backup_times"]) && is_array($saved["b
 $delay = is_array($saved) && isset($saved["delay_minutes"])
     ? (int)$saved["delay_minutes"]
     : (defined("TELEGRAM_DELAY_MINUTES") ? (int)TELEGRAM_DELAY_MINUTES : 2);
-echo implode(",", array_map(static fn($t) => substr((string)$t, 0, 5), $times)), "\n", $delay, "\n";
+$zone = is_array($saved) ? (string)($saved["_timezone"] ?? "UTC") : "UTC";
+try { new DateTimeZone($zone); } catch (Throwable $e) { $zone = "UTC"; }
+echo implode(",", array_map(static fn($t) => substr((string)$t, 0, 5), $times)), "\n", $delay, "\n", $zone, "\n";
 ')" || { echo "Could not read saved delivery schedule." >&2; exit 5; }
 
 mapfile -t values <<< "$settings"
 times_csv="${values[0]:-}"
 delay="${values[1]:-2}"
+timezone="${values[2]:-UTC}"
 [[ "$delay" =~ ^[0-9]{1,2}$ ]] && (( delay <= 30 )) || { echo "Invalid Telegram delay in saved settings." >&2; exit 6; }
+[[ "$timezone" =~ ^(UTC|[A-Za-z_+-]+(/[A-Za-z0-9_+.-]+)+)$ && -e "/usr/share/zoneinfo/$timezone" ]] || { echo "Invalid saved time zone." >&2; exit 6; }
 
 declare -A scheduled=()
 legacy_mode=0
@@ -61,8 +65,9 @@ fi
 
 tmp="$(mktemp /etc/cron.d/atd-mikrotik-backup-telegram.XXXXXX)"
 trap 'rm -f -- "$tmp"' EXIT
+printf 'CRON_TZ=%s\n' "$timezone" > "$tmp"
 if (( legacy_mode )); then
-  printf '%s\n' '* * * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1' > "$tmp"
+  printf '%s\n' '* * * * * atdbackup /usr/bin/php /opt/atd-mikrotik-backup-studio/send-backup.php --scan-backups >/dev/null 2>&1' >> "$tmp"
 else
   while IFS= read -r item; do
     [[ -n "$item" ]] || continue
