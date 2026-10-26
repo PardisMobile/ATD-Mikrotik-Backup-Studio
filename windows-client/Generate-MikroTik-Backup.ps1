@@ -744,23 +744,130 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
 @media(max-width:760px){.password-form{padding:16px;display:grid}.password-form label{min-width:0}.theme-colors{gap:5px}.sidebar{position:static;width:auto;height:auto;padding:13px 16px;border-inline-end:0;border-bottom:1px solid var(--line)}.brand{padding:0;gap:10px}.brand-mark{width:38px;height:38px;border-radius:12px}.brand strong{font-size:17px}.sidebar .side-label,.sidebar .side-active,.sidebar-bottom{display:none}.main-content{margin:0;padding:21px 14px 18px}.topbar{align-items:flex-start;margin-bottom:20px;gap:12px}.topbar h1{font-size:23px}.topbar p{font-size:12px;max-width:270px}.top-actions{gap:6px;flex-wrap:wrap;justify-content:flex-end}.top-actions .btn{width:40px;padding:0;font-size:0}.top-actions .btn .svg-icon{width:18px}.language-btn,.icon-btn{height:38px}.language-btn{padding:0 10px}.welcome-strip{min-height:145px;padding:22px 20px}.welcome-strip h2{font-size:19px}.welcome-strip p{max-width:65%;font-size:11px}.welcome-art{width:75px;height:75px;inset-inline-end:5%;border-radius:23px}.welcome-art .svg-icon{width:45px;height:45px}.stats-grid{gap:10px;margin-bottom:16px}.stat-card{padding:15px;border-radius:14px}.stat-icon{width:33px;height:33px;margin-bottom:11px}.stat-card>strong{font-size:24px}.stat-card small{font-size:9px}.files-panel{border-radius:15px}.panel-heading{padding:18px 16px}.panel-heading h2{font-size:15px}.panel-tools{gap:7px}.panel-tools .btn{padding:0 10px}.panel-tools .btn span{display:none}.search-box{min-width:0}.panel-footer{padding:13px 15px;align-items:flex-start;flex-direction:column}.app-footer{flex-direction:column;gap:5px}.login-card{padding:27px 23px}}
 @media(max-width:390px){.topbar{flex-direction:column}.top-actions{width:100%;justify-content:flex-start}.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.stat-card{padding:13px}.stat-card>strong{font-size:22px}.welcome-art{opacity:.55}.welcome-strip p{max-width:75%}}
 .telegram-panel{margin-bottom:24px}.telegram-guides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;padding:20px 24px 0}.guide-card{position:relative;overflow:hidden;padding:20px;border:1px solid var(--line);border-radius:15px;background:linear-gradient(135deg,var(--surface-2),var(--surface));transition:transform .22s,border-color .22s,box-shadow .22s}.guide-card:hover{transform:translateY(-3px);border-color:var(--blue);box-shadow:0 12px 28px color-mix(in srgb,var(--blue) 12%,transparent)}.guide-step{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--blue-soft);color:var(--blue);font-weight:800;font-size:11px}.guide-card h3{margin:12px 0 6px;font-size:14px}.guide-card p{margin:0 0 12px;color:var(--muted);font-size:12px}.guide-link{display:inline-flex;align-items:center;gap:5px;color:var(--blue);font-weight:750;text-decoration:none}.guide-link:hover{text-decoration:underline}.telegram-form{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:22px 24px 14px}.telegram-form label{display:grid;align-content:start;gap:7px;font-size:12px;font-weight:700}.telegram-form input{width:100%;min-width:0;height:44px;padding:0 13px;border:1px solid var(--line);border-radius:11px;background:var(--surface-2);color:var(--text);outline:none;transition:border-color .2s,box-shadow .2s}.telegram-form input:focus{border-color:var(--blue);box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 14%,transparent)}.telegram-form small,.telegram-test-form small{color:var(--muted);font-size:11px;font-weight:400}.telegram-actions{grid-column:1/-1}.telegram-test-form{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:0 24px 22px}.telegram-test-form button:disabled{opacity:.45;cursor:not-allowed}.telegram-panel .panel-heading{animation:rise-in .45s both}.guide-card{animation:rise-in .5s both}.guide-card:nth-child(2){animation-delay:.08s}@media(max-width:760px){.telegram-guides{grid-template-columns:1fr;padding:15px 15px 0}.telegram-form{grid-template-columns:1fr;padding:17px 15px 12px}.telegram-test-form{padding:0 15px 18px}.telegram-actions{grid-column:auto}}
+/* ATD timezone, pagination and update polish */
+.timezone-panel{margin-bottom:24px;overflow:hidden}.timezone-warning{margin:18px 24px 0;padding:14px 16px;border:1px solid #ef4444;border-inline-start-width:5px;border-radius:12px;background:#fff1f2;color:#991b1b}.timezone-warning strong{display:block;font-size:13px}.timezone-warning p{margin:5px 0 0;font-size:12px;line-height:1.7}.timezone-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap;padding:18px 24px 22px}.timezone-form label{display:grid;gap:7px;min-width:min(100%,280px);font-size:12px;font-weight:700}.timezone-form select,.timezone-form input{height:42px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--text);min-width:240px;outline:none}.timezone-form input[hidden]{display:none}.timezone-form small{width:100%;color:var(--muted);font-size:11px}.pagination{display:flex;align-items:center;justify-content:center;gap:12px}.page-link{display:inline-flex;align-items:center;justify-content:center;padding:7px 11px;border:1px solid var(--line);border-radius:9px;color:var(--blue);text-decoration:none;font-weight:700;transition:background .2s,transform .2s}.page-link:hover{background:var(--surface-2);transform:translateY(-1px)}.app-footer a{color:var(--blue);font-weight:750;text-decoration:none}.app-footer a:hover{text-decoration:underline}.is-loading{opacity:.7;cursor:wait}.btn:disabled,.icon-btn:disabled{opacity:.65;cursor:wait}.timezone-panel,.files-panel,.stat-card{animation:rise-in .42s both}html[data-theme="dark"] .timezone-warning{background:#3a2024;color:#ffc6cc;border-color:#f87171}@media(max-width:760px){.timezone-warning{margin:15px 15px 0}.timezone-form{padding:16px 15px 18px;align-items:stretch}.timezone-form label,.timezone-form select,.timezone-form input{width:100%;min-width:0}.pagination{flex-wrap:wrap}}
 '@
     $js = @'
 (function(){
   const root=document.documentElement;
-  const savedTheme=(()=>{try{return localStorage.getItem('atd-theme')}catch(e){return null}})();
-  if(savedTheme==='dark')root.dataset.theme='dark';
-  const theme=document.getElementById('themeToggle');
-  if(theme)theme.addEventListener('click',function(){const dark=root.dataset.theme!=='dark';if(dark)root.dataset.theme='dark';else delete root.dataset.theme;try{localStorage.setItem('atd-theme',dark?'dark':'light')}catch(e){}});
   const accents=['#1769e0','#0d9488','#7c3aed','#db2777','#ea580c'];
-  const savedAccent=(()=>{try{return localStorage.getItem('atd-accent')}catch(e){return null}})();
-  function setAccent(color){if(!accents.includes(color))return;root.style.setProperty('--blue',color);root.style.setProperty('--accent',color);root.style.setProperty('--blue-soft',color+'20');document.querySelectorAll('[data-accent]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.accent===color?'true':'false'));try{localStorage.setItem('atd-accent',color)}catch(e){}}
-  if(savedAccent)setAccent(savedAccent);
-  document.querySelectorAll('[data-accent]').forEach(b=>b.addEventListener('click',()=>setAccent(b.dataset.accent)));
-  const lang=document.getElementById('languageToggle');
-  if(lang)lang.addEventListener('click',function(){const next=(document.documentElement.lang==='fa')?'en':'fa';document.cookie='atd_lang='+next+'; path=/; max-age=31536000; SameSite=Lax';location.reload()});
-  const search=document.getElementById('backupSearch');
-  if(search)search.addEventListener('input',function(){const q=this.value.trim().toLocaleLowerCase();document.querySelectorAll('#backupTable tbody tr[data-search]').forEach(function(row){row.hidden=!row.dataset.search.toLocaleLowerCase().includes(q)})});
+  const safeGet=(key)=>{try{return localStorage.getItem(key)}catch(e){return null}};
+  const savedTheme=safeGet('atd-theme');
+  if(savedTheme==='dark')root.dataset.theme='dark';
+  function setAccent(color){
+    if(!accents.includes(color))return;
+    root.style.setProperty('--blue',color);root.style.setProperty('--accent',color);root.style.setProperty('--blue-soft',color+'20');
+    document.querySelectorAll('[data-accent]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.accent===color?'true':'false'));
+    try{localStorage.setItem('atd-accent',color)}catch(e){}
+  }
+  const savedAccent=safeGet('atd-accent');if(savedAccent)setAccent(savedAccent);
+  function showMessage(message,ok){
+    let box=document.querySelector('.ajax-message');
+    if(!box){box=document.createElement('div');box.className='alert ajax-message';const main=document.querySelector('.main-content');if(main)main.prepend(box);}
+    box.textContent=message;box.classList.toggle('alert-success',!!ok);box.classList.toggle('alert-error',!ok);
+  }
+  async function loadPage(url){
+    const response=await fetch(url,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
+    if(!response.ok)throw new Error('Request failed ('+response.status+')');
+    const html=await response.text();
+    const parsed=new DOMParser().parseFromString(html,'text/html');
+    const fresh=parsed.querySelector('.app-shell'),current=document.querySelector('.app-shell');
+    if(!fresh||!current)throw new Error('Unexpected response from panel.');
+    current.replaceWith(fresh);
+    document.title=parsed.title||document.title;
+    document.documentElement.lang=parsed.documentElement.lang;
+    document.documentElement.dir=parsed.documentElement.dir;
+    history.replaceState({},'',response.url||url);
+    const newClock=document.getElementById('serverClock');
+    if(newClock)startClock(newClock);
+  }
+  async function submitAjax(form){
+    const isUpdateForm=form.classList.contains('update-form');
+    const submitters=form.querySelectorAll('button[type="submit"],button:not([type])');
+    submitters.forEach(b=>{b.dataset.oldText=b.innerHTML;b.disabled=true;b.classList.add('is-loading')});
+    try{
+      const response=await fetch(form.action||location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
+      if(!response.ok)throw new Error('Request failed ('+response.status+')');
+      const html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html');
+      const fresh=parsed.querySelector('.app-shell'),current=document.querySelector('.app-shell');
+      if(!fresh||!current)throw new Error('Unexpected response from panel.');
+      current.replaceWith(fresh);
+      document.title=parsed.title||document.title;
+      document.documentElement.lang=parsed.documentElement.lang;document.documentElement.dir=parsed.documentElement.dir;
+      if(response.url)history.replaceState({},'',response.url);
+      const clock=document.getElementById('serverClock');if(clock)startClock(clock);
+    }catch(error){showMessage('Operation failed: '+error.message,false)}
+    finally{submitters.forEach(b=>{b.disabled=false;b.classList.remove('is-loading')})}
+  }
+  let clockTimer=null;
+  async function pollUpdateStatus(){
+    const target=document.getElementById('updateStatus');if(!target)return;
+    target.textContent='Update requested. Waiting for the updater…';
+    for(let i=0;i<180;i++){
+      try{
+        const r=await fetch(location.pathname+'?ajax=update_status',{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
+        if(r.ok){
+          const data=await r.json();
+          if(data.status==='running'){target.textContent='Update is running. Keep this page open…';}
+          else if(data.status==='success'){target.textContent='Update completed successfully.';return;}
+          else if(data.status==='failed'){target.textContent='Update failed (exit code '+String(data.exit_code??'unknown')+'). Check the server updater log.';return;}
+          else if(data.status==='unavailable'){target.textContent=data.message||'Updater status is unavailable.';return;}
+        }
+      }catch(e){}
+      await new Promise(resolve=>setTimeout(resolve,2000));
+    }
+    target.textContent='Update status is taking longer than expected. Check again in a moment.';
+  }
+  function startClock(el){
+    if(clockTimer!==null)clearInterval(clockTimer);
+    if(el.dataset.clockStarted==='1')return;el.dataset.clockStarted='1';
+    const zone=el.dataset.timezone||'UTC';let base=parseInt(el.dataset.epoch||'0',10);if(!base)return;
+    const render=()=>{
+      const date=new Date(base*1000);
+      try{
+        const parts=new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date);
+        const v={};parts.forEach(p=>{v[p.type]=p.value});
+        el.textContent=v.year+'-'+v.month+'-'+v.day+' '+v.hour+':'+v.minute+':'+v.second;
+      }catch(e){}
+      base++;
+    };
+    render();clockTimer=setInterval(render,1000);
+  }
+  const clock=document.getElementById('serverClock');if(clock)startClock(clock);
+  document.addEventListener('click',async function(event){
+    const theme=event.target.closest('#themeToggle');
+    if(theme){const dark=root.dataset.theme!=='dark';if(dark)root.dataset.theme='dark';else delete root.dataset.theme;try{localStorage.setItem('atd-theme',dark?'dark':'light')}catch(e){}return}
+    const accent=event.target.closest('[data-accent]');if(accent){setAccent(accent.dataset.accent);return}
+    const lang=event.target.closest('#languageToggle');if(lang){const next=(document.documentElement.lang==='fa')?'en':'fa';document.cookie='atd_lang='+next+'; path=/; max-age=31536000; SameSite=Lax';try{await loadPage(location.href)}catch(e){location.reload()}return}
+    const refresh=event.target.closest('#refreshPanel');if(refresh){refresh.disabled=true;try{await loadPage(location.href)}catch(e){showMessage('Refresh failed: '+e.message,false)}finally{refresh.disabled=false}return}
+    const pageLink=event.target.closest('.pagination a');if(pageLink){event.preventDefault();try{await loadPage(pageLink.href)}catch(e){showMessage('Could not change page: '+e.message,false)}}
+  });
+  document.addEventListener('submit',function(event){
+    const form=event.target;
+    if(!(form instanceof HTMLFormElement)||!document.querySelector('.app-shell'))return;
+    if(form.querySelector('[name="logout"]')||form.classList.contains('login-form'))return;
+    if(!form.querySelector('[name="csrf"]'))return;
+    event.preventDefault();submitAjax(form);
+  });
+  let searchTimer=null;
+  document.addEventListener('input',function(event){
+    const search=event.target.closest('#backupSearch');if(!search)return;
+    const value=search.value;
+    if(searchTimer!==null)clearTimeout(searchTimer);
+    searchTimer=setTimeout(async function(){
+      const url=new URL(location.href);url.searchParams.set('page','1');
+      if(value.trim())url.searchParams.set('q',value.trim());else url.searchParams.delete('q');
+      const caret=value.length;
+      try{await loadPage(url.toString());const next=document.getElementById('backupSearch');if(next){next.focus();next.setSelectionRange(caret,caret)}}catch(e){showMessage('Search failed: '+e.message,false)}
+    },300);
+  });
+  document.addEventListener('change',function(event){
+    const select=event.target.closest('select[name="timezone"]');if(!select)return;
+    const form=select.closest('form'),manual=form&&form.querySelector('[name="timezone_manual"]');
+    if(manual){manual.hidden=select.value!=='Manual';manual.required=select.value==='Manual';}
+  });
+  const zoneSelect=document.querySelector('select[name="timezone"]');
+  if(zoneSelect){const manual=zoneSelect.closest('form').querySelector('[name="timezone_manual"]');if(manual){manual.hidden=zoneSelect.value!=='Manual';manual.required=zoneSelect.value==='Manual';}}
 })();
 '@
 
