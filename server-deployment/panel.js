@@ -32,6 +32,7 @@
     if(newClock)startClock(newClock);
   }
   async function submitAjax(form){
+    const isUpdateForm=form.classList.contains('update-form');
     const submitters=form.querySelectorAll('button[type="submit"],button:not([type])');
     submitters.forEach(b=>{b.dataset.oldText=b.innerHTML;b.disabled=true;b.classList.add('is-loading')});
     try{
@@ -49,6 +50,24 @@
     finally{submitters.forEach(b=>{b.disabled=false;b.classList.remove('is-loading')})}
   }
   let clockTimer=null;
+  async function pollUpdateStatus(){
+    const target=document.getElementById('updateStatus');if(!target)return;
+    target.textContent='Update requested. Waiting for the updater…';
+    for(let i=0;i<180;i++){
+      try{
+        const r=await fetch(location.pathname+'?ajax=update_status',{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
+        if(r.ok){
+          const data=await r.json();
+          if(data.status==='running'){target.textContent='Update is running. Keep this page open…';}
+          else if(data.status==='success'){target.textContent='Update completed successfully.';return;}
+          else if(data.status==='failed'){target.textContent='Update failed (exit code '+String(data.exit_code??'unknown')+'). Check the server updater log.';return;}
+          else if(data.status==='unavailable'){target.textContent=data.message||'Updater status is unavailable.';return;}
+        }
+      }catch(e){}
+      await new Promise(resolve=>setTimeout(resolve,2000));
+    }
+    target.textContent='Update status is taking longer than expected. Check again in a moment.';
+  }
   function startClock(el){
     if(clockTimer!==null)clearInterval(clockTimer);
     if(el.dataset.clockStarted==='1')return;el.dataset.clockStarted='1';
