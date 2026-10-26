@@ -184,7 +184,7 @@ Write-Host ''
 Write-Host 'Keep local backup after upload?' -ForegroundColor Cyan
 Write-Host '  Y) Yes, keep the local .backup file'
 Write-Host '  N) No, delete it only after successful delivery'
-do { $keepLocal = Read-Host 'Choose Y or N' } while ($keepLocal -notmatch '^(?i:y|n)$')
+do { $keepLocal = Read-Host 'Keep local file? [Y/N]' } while ($keepLocal -notmatch '^(?i:y|n)$')
 $deleteAfterUpload = $keepLocal -match '^(?i:n)$'
 
 $outDir = Join-Path $PSScriptRoot 'generated-output'
