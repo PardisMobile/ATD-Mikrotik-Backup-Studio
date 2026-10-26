@@ -176,4 +176,4 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 ### Updater implementation fix — 2026-10-27
 - Updated `server-deployment/update-standalone.sh` to stop deleting/disabling legacy ATD Telegram/worker/scanner unit files during a code update, and to stop repeating that destructive cleanup during its rollback. This avoids altering a user's pre-existing service state as a side effect of an application refresh.
 - The existing updater rollback remains limited and is **not** yet a complete transaction across all late Cron/helper/sudoers operations. Do not claim the updater is fully rollback-safe or production validated; remaining work includes a complete transaction boundary and tests. Telegram sender and AJAX test implementation were not changed.
-- Validation performed for this commit: reviewed the source transformation and checked the resulting script syntax (reported only if the check passes); no live Linux update or Telegram test was run.
+- Validation performed for this commit: source-level review of the targeted changes only. Shell syntax/CI and live Linux update or Telegram delivery tests have not yet been run.
