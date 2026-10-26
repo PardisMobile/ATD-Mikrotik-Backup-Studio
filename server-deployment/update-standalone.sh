@@ -299,3 +299,4 @@ echo "Delivery state and backups preserved: $STATE and configured backup directo
 echo "Pre-update application backup: $BACKUP"
 echo "No third-party web-server configuration or firewall rules were changed."
 echo "ATD Telegram Cron reapplied from saved delivery settings: /etc/cron.d/atd-mikrotik-backup-telegram."
+# The installed Cron helper writes the dedicated scan job invoking --scan-backups.
