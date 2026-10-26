@@ -814,6 +814,12 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
     try{localStorage.setItem('atd-accent',color)}catch(e){}
   }
   const savedAccent=safeGet('atd-accent');if(savedAccent)setAccent(savedAccent);
+  function initTimezoneSelector(){
+    const zoneSelect=document.querySelector('select[name="timezone"]');
+    if(!zoneSelect)return;
+    const form=zoneSelect.closest('form'),manual=form&&form.querySelector('[name="timezone_manual"]');
+    if(manual){manual.hidden=zoneSelect.value!=='Manual';manual.required=zoneSelect.value==='Manual';}
+  }
   function showMessage(message,ok){
     let box=document.querySelector('.ajax-message');
     if(!box){box=document.createElement('div');box.className='alert ajax-message';const main=document.querySelector('.main-content');if(main)main.prepend(box);}
@@ -833,6 +839,7 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
     history.replaceState({},'',response.url||url);
     applyPanelSection();
     startClocks();
+    initTimezoneSelector();
   }
   async function submitAjax(form){
     const isUpdateForm=form.classList.contains('update-form');
@@ -842,6 +849,7 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
       const response=await fetch(form.action||location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
       if(!response.ok)throw new Error('Request failed ('+response.status+')');
       const html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html');
+      const updateStarted=isUpdateForm&&(parsed.querySelector('.alert')?.textContent||'').includes('UPDATE_STARTED');
       const fresh=parsed.querySelector('.app-shell'),current=document.querySelector('.app-shell');
       if(!fresh||!current)throw new Error('Unexpected response from panel.');
       current.replaceWith(fresh);
@@ -850,7 +858,8 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
       if(response.url)history.replaceState({},'',response.url);
       applyPanelSection();
       startClocks();
-      if(isUpdateForm)pollUpdateStatus();
+      initTimezoneSelector();
+      if(updateStarted)pollUpdateStatus();
     }catch(error){showMessage('Operation failed: '+error.message,false)}
     finally{submitters.forEach(b=>{b.disabled=false;b.classList.remove('is-loading')})}
   }
@@ -934,8 +943,7 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
     const form=select.closest('form'),manual=form&&form.querySelector('[name="timezone_manual"]');
     if(manual){manual.hidden=select.value!=='Manual';manual.required=select.value==='Manual';}
   });
-  const zoneSelect=document.querySelector('select[name="timezone"]');
-  if(zoneSelect){const manual=zoneSelect.closest('form').querySelector('[name="timezone_manual"]');if(manual){manual.hidden=zoneSelect.value!=='Manual';manual.required=zoneSelect.value==='Manual';}}
+  initTimezoneSelector();
 })();
 '@
 
