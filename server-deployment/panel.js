@@ -50,6 +50,11 @@
     try{
       const response=await fetch(form.action||location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
       if(!response.ok)throw new Error('Request failed ('+response.status+')');
+      if(form.querySelector('[name="action"]')?.value==='telegram_test'){
+        const data=await response.json();
+        showMessage(data.message||'Telegram test finished.',!!data.ok);
+        return;
+      }
       const html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html');
       const updateStarted=isUpdateForm&&(parsed.querySelector('.alert')?.textContent||'').includes('UPDATE_STARTED');
       const fresh=parsed.querySelector('.app-shell'),current=document.querySelector('.app-shell');
@@ -146,7 +151,7 @@
     if(form.querySelector('[name="logout"]')||form.classList.contains('login-form'))return;
     if(!form.querySelector('[name="csrf"]'))return;
     const action=form.querySelector('[name="action"]')?.value;
-    if(action==='timezone'||action==='update_start'||action==='telegram_test')return;
+    if(action==='timezone'||action==='update_start')return;
     event.preventDefault();submitAjax(form);
   });
   let searchTimer=null;
