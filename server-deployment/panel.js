@@ -48,7 +48,9 @@
     }catch(error){showMessage('Operation failed: '+error.message,false)}
     finally{submitters.forEach(b=>{b.disabled=false;b.classList.remove('is-loading')})}
   }
+  let clockTimer=null;
   function startClock(el){
+    if(clockTimer!==null)clearInterval(clockTimer);
     if(el.dataset.clockStarted==='1')return;el.dataset.clockStarted='1';
     const zone=el.dataset.timezone||'UTC';let base=parseInt(el.dataset.epoch||'0',10);if(!base)return;
     const render=()=>{
@@ -60,7 +62,7 @@
       }catch(e){}
       base++;
     };
-    render();setInterval(render,1000);
+    render();clockTimer=setInterval(render,1000);
   }
   const clock=document.getElementById('serverClock');if(clock)startClock(clock);
   document.addEventListener('click',async function(event){
@@ -75,7 +77,6 @@
     const form=event.target;
     if(!(form instanceof HTMLFormElement)||!document.querySelector('.app-shell'))return;
     if(form.querySelector('[name="logout"]')||form.classList.contains('login-form'))return;
-    if(form.classList.contains('inline-action')&&!confirm('Are you sure you want to delete this backup?')){event.preventDefault();return}
     if(!form.querySelector('[name="csrf"]'))return;
     event.preventDefault();submitAjax(form);
   });
