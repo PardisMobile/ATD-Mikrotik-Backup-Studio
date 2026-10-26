@@ -28,7 +28,15 @@ chmod 0700 "$TMP"
 STAMP=$(date +%Y%m%d%H%M%S)
 BACKUP="$STATE/code-backup-$STAMP"
 mkdir -m 0700 "$BACKUP"
-cleanup(){ rm -rf -- "$TMP"; }
+cleanup(){
+  local rc=$?
+  trap - EXIT
+  # EXIT also runs for explicit exit statements, which do not trigger ERR.
+  # Roll back any still-open transaction before removing its temporary assets.
+  if (( ${UPDATE_TRANSACTION:-0} )); then rollback; fi
+  rm -rf -- "$TMP"
+  exit "$rc"
+}
 trap cleanup EXIT
 
 # Snapshot whether ATD's own backend/listener were active and enabled before
