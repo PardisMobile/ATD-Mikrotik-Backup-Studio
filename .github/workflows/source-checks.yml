@@ -173,8 +173,10 @@ jobs:
               raise SystemExit("Server installer must use the configured public port")
           if "session.save_path=/var/lib/atd-mikrotik-backup-studio/sessions" not in runtime:
               raise SystemExit("PHP session path must be writable under the service sandbox")
-          if 'echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"' not in runtime:
-              raise SystemExit("Installer must print the actual panel endpoint")
+          if 'echo "URL (IP): https://$IP:$PUBLIC_PORT/send-backup.php"' not in runtime:
+              raise SystemExit("Installer must print the detected-IP panel endpoint")
+          if 'echo "URL (hostname): https://$PANEL_HOSTNAME:$PUBLIC_PORT/send-backup.php"' not in runtime:
+              raise SystemExit("Installer must print the configured hostname endpoint when available")
           config = Path("/tmp/atd-test-config.php")
           config.write_text("<?php\nconst PUBLIC_PORT = 24443;\n", encoding="utf-8")
           port = subprocess.check_output(
