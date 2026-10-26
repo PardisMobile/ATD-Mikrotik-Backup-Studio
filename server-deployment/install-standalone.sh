@@ -177,7 +177,9 @@ systemctl is-active --quiet atd-mikrotik-backup-tls.service
 
 # Install/enable cron only when no cron daemon is already active.
 # ATD adds one dedicated /etc/cron.d entry and never edits existing user crontabs.
-if ! systemctl is-active --quiet cron.service 2>/dev/null && ! systemctl is-active --quiet crond.service 2>/dev/null; then
+# Install cron only when its service unit is absent. An installed but inactive
+# daemon is recovered below rather than reinstalling packages over host state.
+if ! systemctl cat cron.service >/dev/null 2>&1 && ! systemctl cat crond.service >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y
