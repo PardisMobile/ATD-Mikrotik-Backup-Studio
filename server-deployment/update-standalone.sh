@@ -193,7 +193,7 @@ else
   echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
 fi
 
-printf '%s\\n' "$COMMIT" > "$STATE/installed-source-commit.tmp"
+printf '%s\n' "$COMMIT" > "$STATE/installed-source-commit.tmp"
 chown root:atdbackup "$STATE/installed-source-commit.tmp"
 chmod 0640 "$STATE/installed-source-commit.tmp"
 mv -f "$STATE/installed-source-commit.tmp" "$STATE/installed-source-commit"

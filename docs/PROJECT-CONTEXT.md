@@ -146,3 +146,5 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - Time-zone and panel-update forms use native POST/redirect rather than the AJAX fragment loader, and redirects use SCRIPT_NAME to avoid PHP_SELF path ambiguity.
 
 - Successful install output shows the detected server IP URL and, when the Windows generator's SFTP host is a DNS name, a second hostname URL using the same public port. The SFTP host is used only as a hostname candidate because the generator instructs users to point SFTP at the same Linux server. DNS resolution and provider firewall reachability remain the operator's responsibility.
+
+- The terminal updater installs the independent system-time-zone helper and validates its sudoers rule immediately after PHP health validation, before Cron recovery. Failed Cron repair rolls back panel assets; installed-source-commit is written only after the full successful path as a plain SHA line.

@@ -113,3 +113,6 @@ Open Settings and choose **Check for updates**. The panel compares the latest Gi
 
 ### Installation URL output
 In Telegram/panel mode, the generated Windows installer uses the SFTP server address as the panel hostname candidate (the generator instructs users to use the same Linux server). After installation it prints the detected server IP and port, and also a hostname URL when the configured address is a DNS hostname. DNS must point to this server and the chosen port must be reachable; changing IPs does not require changing the hostname if DNS is updated correctly. The hostname is stored in the private generated config; older installs without it continue to work.
+
+### Repairing a partial update
+The updater now installs the independent Linux time-zone helper immediately after PHP health validation, before Cron recovery. If Cron repair fails, the updater restores the previous panel files. The installed commit marker is written as a plain 40-character SHA only on the successful update path.
