@@ -124,7 +124,7 @@ fi
 
 
 # Install a narrowly-scoped, root-owned launcher for panel-triggered updates.
-if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1; then
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1 && { [[ ! -x /usr/local/sbin/atd-mikrotik-backup-panel-update-worker ]] || [[ ! -x /usr/local/sbin/atd-mikrotik-backup-panel-update ]]; }; then
   cat > /usr/local/sbin/atd-mikrotik-backup-panel-update-worker <<'ATD_WORKER'
 #!/usr/bin/env bash
 set +e
