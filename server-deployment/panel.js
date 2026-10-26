@@ -119,6 +119,24 @@
     if(theme){const dark=root.dataset.theme!=='dark';if(dark)root.dataset.theme='dark';else delete root.dataset.theme;try{localStorage.setItem('atd-theme',dark?'dark':'light')}catch(e){}return}
     const accent=event.target.closest('[data-accent]');if(accent){setAccent(accent.dataset.accent);return}
     const lang=event.target.closest('#languageToggle');if(lang){const next=(document.documentElement.lang==='fa')?'en':'fa';document.cookie='atd_lang='+next+'; path=/; max-age=31536000; SameSite=Lax';try{await loadPage(location.href)}catch(e){location.reload()}return}
+    const checkUpdates=event.target.closest('#checkUpdates');
+    if(checkUpdates){
+      const status=document.getElementById('checkUpdateStatus');checkUpdates.disabled=true;
+      const fa=document.documentElement.lang==='fa';
+      if(status)status.textContent=fa?'در حال بررسی GitHub…':'Checking GitHub…';
+      try{
+        const response=await fetch(location.pathname+'?ajax=check_update',{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
+        if(!response.ok)throw new Error('HTTP '+response.status);
+        const data=await response.json();
+        if(!status)return;
+        if(data.status==='current')status.textContent=fa?'پنل به‌روز است. نسخه: '+data.installed:'Panel is up to date. Version: '+data.installed;
+        else if(data.status==='available')status.textContent=(fa?'نسخهٔ جدید موجود است: ':'Update available: ')+data.latest.slice(0,12);
+        else if(data.status==='unknown')status.textContent=fa?'نسخهٔ نصب‌شده ثبت نشده؛ یک بار آپدیت اجرا کنید.':'Installed version is unknown; run the updater once.';
+        else status.textContent=data.message||(fa?'بررسی آپدیت ناموفق بود.':'Update check failed.');
+      }catch(error){if(status)status.textContent=(fa?'خطا در بررسی آپدیت: ':'Update check failed: ')+error.message;}
+      finally{checkUpdates.disabled=false;}
+      return;
+    }
     const refresh=event.target.closest('#refreshPanel');if(refresh){refresh.disabled=true;try{await loadPage(location.href)}catch(e){showMessage('Refresh failed: '+e.message,false)}finally{refresh.disabled=false}return}
     const pageLink=event.target.closest('.pagination a');if(pageLink){event.preventDefault();try{await loadPage(pageLink.href)}catch(e){showMessage('Could not change page: '+e.message,false)}}
   });
@@ -127,6 +145,8 @@
     if(!(form instanceof HTMLFormElement)||!document.querySelector('.app-shell'))return;
     if(form.querySelector('[name="logout"]')||form.classList.contains('login-form'))return;
     if(!form.querySelector('[name="csrf"]'))return;
+    const action=form.querySelector('[name="action"]')?.value;
+    if(action==='timezone'||action==='update_start')return;
     event.preventDefault();submitAjax(form);
   });
   let searchTimer=null;

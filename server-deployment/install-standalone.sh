@@ -250,6 +250,10 @@ curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-ti
 [[ -s "$UPDATE_TMP" ]] || { echo 'Could not download the ATD updater; initial install is active, but the updater was not installed.' >&2; exit 9; }
 bash -n "$UPDATE_TMP" || { echo 'Downloaded updater failed shell syntax validation.' >&2; exit 9; }
 install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backup-update
+printf '%s\\n' "$SOURCE_COMMIT" > "$STATE/installed-source-commit.tmp"
+chown atdbackup:atdbackup "$STATE/installed-source-commit.tmp"
+chmod 0640 "$STATE/installed-source-commit.tmp"
+mv -f "$STATE/installed-source-commit.tmp" "$STATE/installed-source-commit"
 
 
 # Install a narrowly-scoped root launcher so the panel can start only the fixed ATD updater.

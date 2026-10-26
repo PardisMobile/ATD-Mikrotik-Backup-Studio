@@ -4,6 +4,7 @@ ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, upload
 
 ## Panel features
 - Lists uploaded `.backup` files from the configured Linux backup directory, with server-side sorting by filename, file size, or modification date while retaining search and pagination.
+- The Settings page can check GitHub for a newer commit and compare it with the recorded installed source commit; update checks do not install anything automatically.
 - Shows Telegram delivery status; one connection test sends the newest existing backup file to Telegram.
 - Supports selecting old backup files for confirmed deletion.
 - Allows changing the panel password.
@@ -106,3 +107,6 @@ To update an existing installation, run `sudo atd-mikrotik-backup-update`. The u
 4. Check embedded PHP/CSS/JS/Cron helper against canonical files after any relevant change.
 5. Run or inspect actual CI and report exact evidence; never infer a pass from missing status checks.
 6. Inspect unique commits and file diffs on both extra branches, reconcile useful work to `main`, and only then remove obsolete branches if repository permissions allow.
+
+### Update check
+Open Settings and choose **Check for updates**. The panel compares the latest GitHub main commit with the installed source commit recorded by the installer/updater. A missing installed-version marker is reported as unknown and recommends one migration/update run. The check is read-only; installation still requires pressing the update button. GitHub connectivity is required.

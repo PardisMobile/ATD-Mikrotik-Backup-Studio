@@ -141,3 +141,6 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - The panel footer already contains “Code by Amir Taheri” linked to the approved WhatsApp URL; do not duplicate or rewrite it unnecessarily.
 
 - Backup listing supports server-side sort by filename (ascending), file size (descending), and modification time (newest first). Sort selection is preserved across pagination and search.
+
+- Settings includes an explicit read-only GitHub update check. It compares the latest main commit SHA with the locally recorded installed source commit, and never installs updates without user action. Older installs with no recorded SHA are reported as unknown and require a one-time updater run to establish the baseline.
+- Time-zone and panel-update forms use native POST/redirect rather than the AJAX fragment loader, and redirects use SCRIPT_NAME to avoid PHP_SELF path ambiguity.

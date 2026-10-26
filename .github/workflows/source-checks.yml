@@ -105,6 +105,10 @@ jobs:
               raise SystemExit("Panel must include section navigation and the top-bar live clock.")
           if "$_GET['sort']" not in php or "$sortHeader('size'" not in php:
               raise SystemExit("Panel must provide server-side sorting controls.")
+          if "check_update" not in php or "installed-source-commit" not in php:
+              raise SystemExit("Panel must expose a read-only GitHub update check and installed-version marker.")
+          if 'id="checkUpdates"' not in php or "checkUpdateStatus" not in php:
+              raise SystemExit("Panel must display an update-check control and status.")
           if "in_array('--scan-backups', $argv ?? [], true)" not in php or "function send_telegram_file(" not in php:
               raise SystemExit("PHP must provide the automatic CLI scanner and Telegram sender")
           if "STABILITY_CHECKS = 2" not in php:
