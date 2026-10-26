@@ -15,5 +15,6 @@ zone_path="$(realpath -e -- "$ZONE_ROOT/$zone" 2>/dev/null)" || { echo "Time zon
 command -v timedatectl >/dev/null 2>&1 || { echo "timedatectl is unavailable; system time zone was not changed." >&2; exit 6; }
 timedatectl set-timezone "$zone"
 actual="$(timedatectl show --property=Timezone 2>/dev/null | sed -n 's/^Timezone=//p')"
-[[ "$actual" == "$zone" ]] || { echo "Could not verify the applied system time zone." >&2; exit 7; }
+actual_path="$(realpath -e -- "$ZONE_ROOT/$actual" 2>/dev/null)" || { echo "Could not verify the applied system time zone." >&2; exit 7; }
+[[ "$actual_path" == "$zone_path" ]] || { echo "Could not verify the applied system time zone." >&2; exit 7; }
 printf 'Linux system time zone set to %s. The system clock itself was not manually changed.\n' "$zone"
