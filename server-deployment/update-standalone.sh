@@ -182,3 +182,9 @@ echo "Pre-update application backup: $BACKUP"
 echo "No third-party web-server configuration or firewall rules were changed."
 echo "ATD Telegram Cron reapplied from saved delivery settings: /etc/cron.d/atd-mikrotik-backup-telegram."
 # The Cron helper writes entries invoking --scan-backups.
+# Refresh the installed updater for future releases; this is deliberately the final operation.
+NEXT_UPDATER=$(mktemp)
+if curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/update-standalone.sh" -o "$NEXT_UPDATER" && bash -n "$NEXT_UPDATER"; then
+  install -o root -g root -m 0750 "$NEXT_UPDATER" /usr/local/sbin/atd-mikrotik-backup-update
+fi
+rm -f -- "$NEXT_UPDATER"
