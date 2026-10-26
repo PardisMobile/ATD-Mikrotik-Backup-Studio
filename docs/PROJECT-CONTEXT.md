@@ -155,3 +155,10 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - Treat this commit as the known-good server-installation/Telegram behavior reference when auditing later changes. Do not rewrite, “improve,” or regress the Telegram test/send behavior without first comparing against this baseline and getting clear user approval for a behavior change.
 - The later commit `3615c0e0924c09b9844a55f48f818916bbcd8166` (“Handle Telegram test JSON without page refresh”) is also relevant to the panel's AJAX response path, but it does **not** replace the user-confirmed initial-install baseline above.
 - Preserve Telegram delivery settings, server-side sending, file discovery/stability checks, deduplication/retry behavior, and the AJAX test button behavior. Record any future Telegram-related code or test changes here, with the commit and explicit test status. Never describe unperformed live Telegram delivery as tested.
+
+
+### Preserve Telegram test AJAX contract — 2026-10-27
+- User explicitly requests that the Telegram Test button remain AJAX-based without a page reload, while preserving the behavior of the known-good initial server install commit `13cf0dd5fefcede571b7d6af66b1c9c2910093fc`.
+- Verified in current `main`: `panel.js` submits `telegram_test` through `fetch()` with `X-Requested-With: XMLHttpRequest`, parses JSON, displays the returned message, and exits without replacing/reloading the page. `send-backup.php` detects that AJAX header, emits JSON `{ok,message}`, and exits before the normal redirect. This request/response pair is the required contract; keep it intact during updater/timezone work.
+- Do not rewrite Telegram sending, settings, file-selection, stability, deduplication, or retry logic as part of the AJAX work. A test button click currently sends the latest backup to Telegram (it is not merely a getMe connectivity probe); retain that established behavior unless the user expressly asks to change it.
+- This is source inspection, not a live browser or Telegram-delivery test. Record test results honestly.
