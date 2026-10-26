@@ -231,7 +231,7 @@ install -o root -g root -m 0750 "$TIMEZONE_HELPER_TMP" /usr/local/sbin/atd-mikro
 rm -f "$TIMEZONE_HELPER_TMP"
 if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
   TIMEZONE_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-timezone.XXXXXX)
-  printf '%s\\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
+  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
   chmod 0440 "$TIMEZONE_SUDOERS_TMP"
   if visudo -cf "$TIMEZONE_SUDOERS_TMP" >/dev/null; then
     install -o root -g root -m 0440 "$TIMEZONE_SUDOERS_TMP" /etc/sudoers.d/atd-panel-timezone
