@@ -34,3 +34,5 @@ html[data-theme="dark"]{color-scheme:dark;--bg:#10151e;--surface:#171e29;--surfa
 
 html[data-theme="dark"] .welcome-strip{background:linear-gradient(110deg,color-mix(in srgb,var(--blue) 22%,var(--surface)) 0%,var(--surface) 62%,color-mix(in srgb,var(--blue) 14%,var(--surface)) 100%);border-color:color-mix(in srgb,var(--blue) 30%,var(--line))}
 html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in srgb,var(--blue) 16%,var(--surface))}
+
+.sort-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;white-space:nowrap;transition:color .18s}.sort-link:hover,.sort-link.is-active{color:var(--blue)}.sort-link span{font-size:11px;opacity:.8}.sort-link.is-active span{font-weight:800}

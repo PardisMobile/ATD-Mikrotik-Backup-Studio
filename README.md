@@ -3,7 +3,7 @@
 ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, uploads them over the existing SFTP workflow, and automatically sends newly arrived, stable backup files to Telegram using a Linux-side Cron schedule derived from the selected RouterOS backup times. RouterOS scripts remain SFTP-only; Telegram delivery failures cannot affect backup creation, SFTP, or the Keep/Delete local-file choice.
 
 ## Panel features
-- Lists uploaded `.backup` files from the configured Linux backup directory.
+- Lists uploaded `.backup` files from the configured Linux backup directory, with server-side sorting by filename, file size, or modification date while retaining search and pagination.
 - Shows Telegram delivery status; one connection test sends the newest existing backup file to Telegram.
 - Supports selecting old backup files for confirmed deletion.
 - Allows changing the panel password.

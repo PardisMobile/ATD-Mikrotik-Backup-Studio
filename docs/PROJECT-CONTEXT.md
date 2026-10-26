@@ -139,3 +139,5 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - A live Linux date/time clock appears in the top bar. The settings card also shows the detected system zone.
 - The timezone selector applies the selected zone to the Linux host only after explicit user submission, using a root-owned helper that accepts no command-line arguments and validates a zone against `/usr/share/zoneinfo`. The same selected zone remains the `CRON_TZ` zone. This does not change the actual system clock, NTP configuration, or RouterOS settings.
 - The panel footer already contains “Code by Amir Taheri” linked to the approved WhatsApp URL; do not duplicate or rewrite it unnecessarily.
+
+- Backup listing supports server-side sort by filename (ascending), file size (descending), and modification time (newest first). Sort selection is preserved across pagination and search.

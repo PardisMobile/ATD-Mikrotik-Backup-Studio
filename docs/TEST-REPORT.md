@@ -55,3 +55,5 @@ Do not describe the project as production-ready until the latest CI checks pass 
 - Time-zone settings use a narrowly scoped root-owned helper to call timedatectl set-timezone, validate the installed IANA zone, and preserve the existing Linux Cron schedule setting. The actual system clock is not set manually and NTP is not changed.
 - Updated accent-aware UI styling and README guidance. The footer already displayed “Code by Amir Taheri” with the approved WhatsApp link before this batch.
 - Static checks must pass on the resulting commit. A live Ubuntu server, RouterOS router, and real Telegram/SFTP end-to-end test have not been run from this change session.
+
+- Added server-side backup sorting by name, size, and modification time; search and pagination preserve the selected sort. Static CI verifies syntax and embedded-asset parity; this feature has not been exercised against a live backup directory in this session.
