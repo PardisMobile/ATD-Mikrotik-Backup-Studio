@@ -95,7 +95,7 @@ rollback(){
 
 # Snapshot every ATD-owned file this script can replace, excluding private config
 # and user data. A MISSING marker lets rollback remove only newly created files.
-for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/sudoers.d/atd-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit"; do
+for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/sudoers.d/atd-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer /etc/systemd/system/atd-mikrotik-backup-worker.service /etc/systemd/system/atd-mikrotik-backup-worker.timer /etc/systemd/system/atd-mikrotik-backup-scanner.service /etc/systemd/system/atd-mikrotik-backup-scanner.timer; do
   if [[ -e "$path" ]]; then
     printf '%s\\n' "$path" >> "$BACKUP/snapshots.list"
     cp -a --parents "$path" "$BACKUP/"
