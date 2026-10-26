@@ -813,7 +813,11 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
     document.querySelectorAll('[data-accent]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.accent===color?'true':'false'));
     try{localStorage.setItem('atd-accent',color)}catch(e){}
   }
-  const savedAccent=safeGet('atd-accent');if(savedAccent)setAccent(savedAccent);
+  function syncAccentSwatches(){
+    const color=safeGet('atd-accent');
+    document.querySelectorAll('[data-accent]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.accent===color?'true':'false'));
+  }
+  const savedAccent=safeGet('atd-accent');if(savedAccent)setAccent(savedAccent);else syncAccentSwatches();
   function initTimezoneSelector(){
     const zoneSelect=document.querySelector('select[name="timezone"]');
     if(!zoneSelect)return;
@@ -840,6 +844,7 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
     applyPanelSection();
     startClocks();
     initTimezoneSelector();
+    syncAccentSwatches();
   }
   async function submitAjax(form){
     const isUpdateForm=form.classList.contains('update-form');
@@ -859,6 +864,7 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
       applyPanelSection();
       startClocks();
       initTimezoneSelector();
+      syncAccentSwatches();
       if(updateStarted)pollUpdateStatus();
     }catch(error){showMessage('Operation failed: '+error.message,false)}
     finally{submitters.forEach(b=>{b.disabled=false;b.classList.remove('is-loading')})}
