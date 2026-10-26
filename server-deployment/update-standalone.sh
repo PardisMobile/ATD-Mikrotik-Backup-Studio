@@ -19,6 +19,10 @@ rm -f -- "$COMMIT_TMP"
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable GitHub source commit; update aborted.' >&2; exit 5; }
 BASE="https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$COMMIT/server-deployment"
 
+# Serialize terminal and panel-triggered updater executions.
+exec 9>"$STATE/update.lock"
+flock -n 9 || { echo 'Another ATD update is already running.' >&2; exit 9; }
+
 TMP=$(mktemp -d /tmp/atd-update.XXXXXX)
 chmod 0700 "$TMP"
 STAMP=$(date +%Y%m%d%H%M%S)
@@ -26,6 +30,15 @@ BACKUP="$STATE/code-backup-$STAMP"
 mkdir -m 0700 "$BACKUP"
 cleanup(){ rm -rf -- "$TMP"; }
 trap cleanup EXIT
+
+# Snapshot whether ATD's own backend/listener were active and enabled before
+# touching code. The update must stop them during replacement and restore state.
+PHP_WAS_ACTIVE=0; TLS_WAS_ACTIVE=0
+PHP_WAS_ENABLED=0; TLS_WAS_ENABLED=0
+systemctl is-active --quiet atd-mikrotik-backup-php.service && PHP_WAS_ACTIVE=1 || true
+systemctl is-active --quiet atd-mikrotik-backup-tls.service && TLS_WAS_ACTIVE=1 || true
+systemctl is-enabled --quiet atd-mikrotik-backup-php.service && PHP_WAS_ENABLED=1 || true
+systemctl is-enabled --quiet atd-mikrotik-backup-tls.service && TLS_WAS_ENABLED=1 || true
 
 for f in send-backup.php panel.css panel.js cron-helper.sh set-system-timezone.sh; do
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$f" -o "$TMP/$f"
@@ -65,6 +78,49 @@ rollback(){
 # Preserve existing helper and apply-worker Cron file so rollback can restore them.
 [[ ! -e /usr/local/sbin/atd-mikrotik-backup-cron ]] || cp -p /usr/local/sbin/atd-mikrotik-backup-cron "$BACKUP/cron-helper.sh"
 [[ ! -e /etc/cron.d/atd-mikrotik-backup-apply ]] || cp -p /etc/cron.d/atd-mikrotik-backup-apply "$BACKUP/cron-apply"
+
+# Snapshot every ATD-owned file this script can replace, excluding private config
+# and user data. A MISSING marker lets rollback remove only newly created files.
+for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /etc/cron.d/atd-mikrotik-backup-apply /etc/sudoers.d/atd-mikrotik-backup-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit"; do
+  if [[ -e "$path" ]]; then
+    printf '%s\\n' "$path" >> "$BACKUP/snapshots.list"
+    cp -a --parents "$path" "$BACKUP/"
+  else
+    printf 'MISSING:%s\\n' "$path" >> "$BACKUP/snapshots.list"
+  fi
+done
+
+UPDATE_TRANSACTION=1
+rollback(){
+  echo 'Update failed; restoring previous ATD files and service state.' >&2
+  for f in send-backup.php panel.css panel.js; do
+    if [[ -f "$BACKUP/$f" ]]; then cp -p "$BACKUP/$f" "$APP/$f"; else rm -f -- "$APP/$f"; fi
+  done
+  if [[ -s "$BACKUP/snapshots.list" ]]; then
+    while IFS= read -r path; do
+      if [[ "$path" == MISSING:* ]]; then
+        rm -f -- "${path#MISSING:}"
+      else
+        rel="${path#/}"
+        if [[ -e "$BACKUP/$rel" ]]; then mkdir -p -- "$(dirname "$path")"; cp -a -- "$BACKUP/$rel" "$path"; fi
+      fi
+    done < "$BACKUP/snapshots.list"
+  fi
+  chown root:atdbackup "$APP/send-backup.php" "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
+  chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
+  chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
+  systemctl daemon-reload 2>/dev/null || true
+  if (( PHP_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-php.service 2>/dev/null || true; fi
+  if (( TLS_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
+  if (( PHP_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-php.service 2>/dev/null || true; fi
+  if (( TLS_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
+  UPDATE_TRANSACTION=0
+}
+trap 'if (( UPDATE_TRANSACTION )); then rollback; fi' ERR
+
+# Stop only ATD's application services while replacing live assets.
+if (( PHP_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-php.service; fi
+if (( TLS_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-tls.service; fi
 install -o root -g root -m 0750 "$TMP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
 cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
 * * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
@@ -81,9 +137,16 @@ chown root:atdbackup "$APP/send-backup.php"
 chmod 0640 "$APP/send-backup.php"
 chmod 0644 "$APP/panel.css" "$APP/panel.js"
 systemctl daemon-reload
-if ! php -l "$APP/send-backup.php" >/dev/null || ! systemctl restart atd-mikrotik-backup-php.service || ! systemctl is-active --quiet atd-mikrotik-backup-php.service; then
-  rollback
-  exit 7
+php -l "$APP/send-backup.php" >/dev/null
+# Restart/start only services that were active before the update. Preserve an
+# intentional stopped/disabled service instead of changing the host's choice.
+if (( PHP_WAS_ACTIVE )); then
+  systemctl start atd-mikrotik-backup-php.service
+  systemctl is-active --quiet atd-mikrotik-backup-php.service
+fi
+if (( TLS_WAS_ACTIVE )); then
+  systemctl start atd-mikrotik-backup-tls.service
+  systemctl is-active --quiet atd-mikrotik-backup-tls.service
 fi
 # Ensure cron is available without editing any existing crontabs.
 if ! systemctl is-active --quiet cron.service 2>/dev/null && ! systemctl is-active --quiet crond.service 2>/dev/null; then
@@ -183,20 +246,23 @@ else
   echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
 fi
 
+# Updater self-refresh is mandatory for a successful transaction; otherwise the
+# application and its installed update mechanism would report different versions.
+NEXT_UPDATER=$(mktemp)
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/update-standalone.sh" -o "$NEXT_UPDATER"
+bash -n "$NEXT_UPDATER"
+install -o root -g root -m 0750 "$NEXT_UPDATER" /usr/local/sbin/atd-mikrotik-backup-update
+rm -f -- "$NEXT_UPDATER"
+
 printf '%s\n' "$COMMIT" > "$STATE/installed-source-commit.tmp"
 chown root:atdbackup "$STATE/installed-source-commit.tmp"
 chmod 0640 "$STATE/installed-source-commit.tmp"
 mv -f "$STATE/installed-source-commit.tmp" "$STATE/installed-source-commit"
+UPDATE_TRANSACTION=0
+trap - ERR
 echo "ATD application updated successfully."
 echo "Private configuration preserved: $TLS/config.php"
 echo "Delivery state and backups preserved: $STATE and configured backup directory."
 echo "Pre-update application backup: $BACKUP"
 echo "No third-party web-server configuration or firewall rules were changed."
 echo "ATD Telegram Cron reapplied from saved delivery settings: /etc/cron.d/atd-mikrotik-backup-telegram."
-# The Cron helper writes entries invoking --scan-backups.
-# Refresh the installed updater for future releases; this is deliberately the final operation.
-NEXT_UPDATER=$(mktemp)
-if curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/update-standalone.sh" -o "$NEXT_UPDATER" && bash -n "$NEXT_UPDATER"; then
-  install -o root -g root -m 0750 "$NEXT_UPDATER" /usr/local/sbin/atd-mikrotik-backup-update
-fi
-rm -f -- "$NEXT_UPDATER"
