@@ -122,6 +122,59 @@ if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
 fi
 /usr/local/sbin/atd-mikrotik-backup-cron --apply
 
+
+# Install a narrowly-scoped, root-owned launcher for panel-triggered updates.
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1; then
+  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update-worker <<'ATD_WORKER'
+#!/usr/bin/env bash
+set +e
+STATE=/var/lib/atd-mikrotik-backup-studio
+/usr/local/sbin/atd-mikrotik-backup-update > "$STATE/panel-update.log" 2>&1
+rc=$?
+if [[ "$rc" -eq 0 ]]; then status=success; else status=failed; fi
+tmp="$STATE/panel-update.status.tmp"
+printf '{"status":"%s","exit_code":%s,"finished_at":"%s"}\n' "$status" "$rc" "$(date -u +%FT%TZ)" > "$tmp"
+chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
+chown root:atdbackup "$STATE/panel-update.log"; chmod 0640 "$STATE/panel-update.log"
+exit "$rc"
+ATD_WORKER
+  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
+  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
+  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update <<'ATD_LAUNCHER'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+[[ "$#" -eq 0 ]] || { echo 'Arguments are not accepted.' >&2; exit 2; }
+STATE=/var/lib/atd-mikrotik-backup-studio
+if systemctl is-active --quiet atd-mikrotik-backup-panel-update.service; then
+  echo 'An update is already running.' >&2; exit 9
+fi
+tmp="$STATE/panel-update.status.tmp"
+printf '{"status":"running","started_at":"%s"}\n' "$(date -u +%FT%TZ)" > "$tmp"
+chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
+if ! /usr/bin/systemd-run --unit=atd-mikrotik-backup-panel-update --collect --no-block /usr/local/sbin/atd-mikrotik-backup-panel-update-worker; then
+  tmp="$STATE/panel-update.status.tmp"
+  printf '{"status":"failed","exit_code":1,"message":"Could not start updater."}\n' > "$tmp"
+  chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
+  exit 1
+fi
+ATD_LAUNCHER
+  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update
+  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update
+  SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-update.XXXXXX)
+  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-panel-update' > "$SUDOERS_TMP"
+  chmod 0440 "$SUDOERS_TMP"
+  if visudo -cf "$SUDOERS_TMP" >/dev/null; then
+    install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/atd-mikrotik-backup-panel-update
+    rm -f "$SUDOERS_TMP"
+    echo 'Panel-triggered updater installed with a restricted sudo rule.'
+  else
+    rm -f "$SUDOERS_TMP"
+    echo 'Warning: panel updater sudo rule failed validation; terminal updates remain available.' >&2
+  fi
+else
+  echo 'Warning: sudo, visudo, or systemd-run is unavailable; panel-triggered updates are disabled.' >&2
+fi
+
 echo "ATD application updated successfully."
 echo "Private configuration preserved: $TLS/config.php"
 echo "Delivery state and backups preserved: $STATE and configured backup directory."
