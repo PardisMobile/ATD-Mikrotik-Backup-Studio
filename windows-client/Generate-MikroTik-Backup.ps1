@@ -710,6 +710,8 @@ const BACKUP_SCHEDULE_TIMES = [$schedulePhp];
 const TELEGRAM_DELAY_MINUTES = 2;
 const DEFAULT_TIMEZONE = '$timeZoneName';
 "@
+    $panelHostPhp = $sftpHost.Replace('\', '\\').Replace("'", "\'")
+    $configPhp = $configPhp.Replace("const PUBLIC_PORT = $publicPort;", "const PUBLIC_PORT = $publicPort; const PANEL_HOSTNAME = '$panelHostPhp';")
     $configB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($configPhp))
 
     $cronHelper = @'

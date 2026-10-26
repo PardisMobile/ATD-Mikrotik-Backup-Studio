@@ -125,6 +125,8 @@ PYPORT
 fi
 [[ "$PUBLIC_PORT" =~ ^[0-9]+$ && "$PUBLIC_PORT" -ge 20000 && "$PUBLIC_PORT" -le 60000 && "$BACKEND_PORT" =~ ^[0-9]+$ && "$BACKEND_PORT" -ge 2000 && "$BACKEND_PORT" -le 19999 ]] || { echo 'Invalid stored port configuration.' >&2; exit 7; }
 IP=$(hostname -I 2>/dev/null | awk '{print $1}'); [[ -n "$IP" ]] || IP=127.0.0.1
+PANEL_HOSTNAME=$(php -r 'require $argv[1]; echo defined("PANEL_HOSTNAME") ? PANEL_HOSTNAME : "";' "$SRC/config.php" 2>/dev/null || true)
+if [[ ! "$PANEL_HOSTNAME" =~ ^[A-Za-z0-9.-]+$ || "$PANEL_HOSTNAME" == *..* ]]; then PANEL_HOSTNAME=""; fi
 if [[ ! -s "$TLS/server.crt" || ! -s "$TLS/server.key" ]]; then
   openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 -keyout "$TLS/server.key" -out "$TLS/server.crt" -subj "/CN=$IP" -addext "subjectAltName=IP:$IP" >/dev/null 2>&1
   chmod 0600 "$TLS/server.key"; chmod 0644 "$TLS/server.crt"
@@ -312,7 +314,12 @@ fi
 FW="No firewall rules were changed. If remote access is required, allow TCP $PUBLIC_PORT in the host/provider firewall after reviewing existing policy."
 
 echo; echo 'ATD MikroTik Backup Studio installed.'
-echo "URL: https://$IP:$PUBLIC_PORT/send-backup.php"
+echo "URL (IP): https://$IP:$PUBLIC_PORT/send-backup.php"
+if [[ -n "$PANEL_HOSTNAME" && "$PANEL_HOSTNAME" != "$IP" && ! "$PANEL_HOSTNAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "URL (hostname): https://$PANEL_HOSTNAME:$PUBLIC_PORT/send-backup.php"
+else
+  echo 'Hostname URL: not configured separately (the Windows SFTP address is an IP or matches the detected IP).'
+fi
 echo 'Certificate: self-signed; browser warning expected, TLS traffic is encrypted.'
 echo "Firewall: $FW"
 echo "Backup directory: $BACKUP_DIR"

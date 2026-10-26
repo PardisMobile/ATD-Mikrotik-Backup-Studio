@@ -105,6 +105,10 @@ jobs:
               raise SystemExit("Panel must include section navigation and the top-bar live clock.")
           if "$_GET['sort']" not in php or "$sortHeader('size'" not in php:
               raise SystemExit("Panel must provide server-side sorting controls.")
+          if "PANEL_HOSTNAME" not in Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8"):
+              raise SystemExit("Windows generator must preserve the panel hostname in generated configuration.")
+          if 'URL (hostname): https://$PANEL_HOSTNAME:$PUBLIC_PORT/send-backup.php' not in Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8"):
+              raise SystemExit("Installer must print the hostname-based panel URL when configured.")
           if "check_update" not in php or "installed-source-commit" not in php:
               raise SystemExit("Panel must expose a read-only GitHub update check and installed-version marker.")
           if "commits/main.atom" not in php or "network/TLS error" not in php:

@@ -110,3 +110,6 @@ To update an existing installation, run `sudo atd-mikrotik-backup-update`. The u
 
 ### Update check
 Open Settings and choose **Check for updates**. The panel compares the latest GitHub main commit with the installed source commit recorded by the installer/updater. A missing installed-version marker is reported as unknown and recommends one migration/update run. The check is read-only; installation still requires pressing the update button. GitHub connectivity is required.
+
+### Installation URL output
+In Telegram/panel mode, the generated Windows installer uses the SFTP server address as the panel hostname candidate (the generator instructs users to use the same Linux server). After installation it prints the detected server IP and port, and also a hostname URL when the configured address is a DNS hostname. DNS must point to this server and the chosen port must be reachable; changing IPs does not require changing the hostname if DNS is updated correctly. The hostname is stored in the private generated config; older installs without it continue to work.
