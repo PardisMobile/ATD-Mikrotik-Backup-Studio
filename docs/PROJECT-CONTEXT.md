@@ -182,3 +182,11 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - Corrected the generated PowerShell bootstrap's embedded PHP and JavaScript templates to match canonical server assets. This restores the AJAX Telegram Test contract (panel.js / send-backup.php): no page reload, JSON response handling. Telegram send behavior and RouterOS/SFTP code were not changed.
 - CI at the last verification point: Installer checks succeeded; PowerShell parse and shell syntax checks succeeded. Source checks were still running. The GitHub source-check workflow had earlier exposed the generated PHP/JS mismatch; the canonical templates were synchronized afterward.
 - These are repository/CI validations, not a live Ubuntu installation or Telegram send test. Do not claim production update/rollback behavior or live Telegram delivery has been verified until tested on the user's server.
+
+
+### User clarification — panel/Linux timezone and scope (2026-10-27)
+- Do not keep reopening the MikroTik timezone topic. The RouterOS backup script is independent; its timezone behavior is out of scope for this panel issue.
+- The panel's Linux timezone must align with the Linux host timezone. Cron has its own timezone setting; when the panel and Cron are both set to Asia/Tehran, there is no timezone offset mismatch to explain or repeatedly warn about.
+- The Windows generator already collects the default timezone from the user and places it in the PHP configuration. Do not treat this as an unresolved design question or ask the user to repeat it.
+- The user has repeatedly asked for a thorough inspection of the updater before edits, and actual code work—not recurring status-only reports or repeated explanations that the timezone helper is installed late in the updater. Investigate the real execution and rollback paths, identify a reproducible fault, and implement/test a substantive correction.
+- Be precise about work: source review is not a fix; do not report completed implementation or live-server validation unless actually performed. The current task is to continue from the actual repo state and deliver code changes after full impact review.
