@@ -52,9 +52,9 @@ grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
 grep -q 'TELEGRAM_NOT_CONFIGURED' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks Telegram setup checks; update aborted.' >&2; exit 6; }
 
-# This release migrates the obsolete systemd scanner/worker timers to the ATD-owned
-# Cron scanner. Stage/validate every replacement asset and snapshot each legacy
-# unit plus its active/enabled state before disabling/removing it.
+# Do not disable legacy services or touch live files until all replacement assets validate.
+# This release migrates obsolete systemd scanner/worker timers to the ATD-owned
+# Cron scanner. Snapshot each legacy unit plus its active/enabled state first.
 
 LEGACY_UNITS=(
   atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
