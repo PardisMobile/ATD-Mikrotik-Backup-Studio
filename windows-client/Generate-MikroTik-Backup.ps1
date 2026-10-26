@@ -3,10 +3,13 @@ $Host.UI.RawUI.WindowTitle = 'MikroTik RouterOS 7 Backup Generator'
 
 function Read-Required([string]$Prompt, [string]$Default = '') {
     while ($true) {
-        if ($Default) { $v = Read-Host "$Prompt [$Default]"; if ([string]::IsNullOrWhiteSpace($v)) { $v = $Default } }
-        else { $v = Read-Host $Prompt }
+        $display = if ($Default) { "$Prompt [$Default]" } else { $Prompt }
+        Write-Host $display -ForegroundColor Cyan -NoNewline
+        Write-Host ''
+        $v = Read-Host
+        if ($Default -and [string]::IsNullOrWhiteSpace($v)) { $v = $Default }
         if (-not [string]::IsNullOrWhiteSpace($v)) { return $v.Trim() }
-        Write-Host 'This value is required.' -ForegroundColor Yellow
+        Write-Host 'This field is required. Please try again.' -ForegroundColor Yellow
     }
 }
 function Read-SecretText([string]$Prompt) {
@@ -61,7 +64,7 @@ Write-Host 'Choose how you want to use the backup tool:' -ForegroundColor Cyan
 Write-Host '  1) SFTP only - create backups and upload them to your Linux server.'
 Write-Host '  2) SFTP + Telegram panel - upload backups and manage automatic Telegram delivery.'
 Write-Host '  Note: Telegram Bot Token and Chat ID are entered later in the web panel.' -ForegroundColor Gray
-do { $mode = Read-Host 'Select 1 or 2' } while ($mode -notin @('1','2'))
+do { $mode = Read-Host 'Choose 1 or 2' } while ($mode -notin @('1','2'))
 
 $useSftp = $true
 $useTelegram = $mode -eq '2'
@@ -70,13 +73,13 @@ if ($mode -eq '1') { $useTelegram = $false }
 Write-Host ''
 Write-Host 'SFTP settings (required in both modes)' -ForegroundColor Cyan
 Write-Host 'Use the same Linux server where the panel will be installed (mode 2). The panel reads backups from this server.' -ForegroundColor Gray
-Write-Host 'Enter the real Linux filesystem path, not a chroot-relative SFTP path. The backup folder must exist and be writable before the first backup.' -ForegroundColor Yellow
-$sftpHost = Read-Required 'SFTP hostname or IP'
+Write-Host 'Use the real Linux path, not a chroot-relative path. The folder must exist and be writable.' -ForegroundColor Gray
+$sftpHost = Read-Required 'SFTP server address (IP or hostname)'
 $sftpPort = '22'
 Write-Host 'SFTP port is fixed to 22.' -ForegroundColor DarkGray
 $sftpUser = Read-Required 'SFTP username'
-$sftpPass = Read-SecretText 'SFTP password (will be written into the RouterOS script; use a dedicated restricted account)'
-$remoteDir = Read-Required 'Absolute Linux filesystem path on this server (not a chroot-relative SFTP path)' '/root/uploads'
+$sftpPass = Read-SecretText 'SFTP password (stored in generated script; use a restricted SFTP account)'
+$remoteDir = Read-Required 'Backup folder on Linux (absolute path, e.g. /root/uploads)' '/root/uploads'
 $remoteDir = $remoteDir.TrimEnd('/')
 if ([string]::IsNullOrWhiteSpace($remoteDir)) { $remoteDir = '/' }
 # Relative names resolve under /root, as documented for this product.
@@ -118,11 +121,11 @@ Write-Host ''
 Write-Host 'TIME ZONE / REGION' -ForegroundColor Cyan
 Write-Host 'Choose the time zone used by the router and the Linux-side backup schedule.' -ForegroundColor Gray
 Write-Host 'This sets the RouterOS time-zone name and records the same IANA zone for panel configuration.' -ForegroundColor DarkGray
-Write-Host '  1) Iran       - Asia/Tehran'
-Write-Host '  2) India      - Asia/Kolkata'
-Write-Host '  3) Germany    - Europe/Berlin'
-Write-Host '  4) USA        - America/New_York'
-Write-Host '  5) Manual     - enter an IANA time-zone name, e.g. Asia/Dubai or America/Los_Angeles'
+Write-Host '  1) Iran       - Asia/Tehran' -ForegroundColor White
+Write-Host '  2) India      - Asia/Kolkata' -ForegroundColor White
+Write-Host '  3) Germany    - Europe/Berlin' -ForegroundColor White
+Write-Host '  4) USA        - America/New_York' -ForegroundColor White
+Write-Host '  5) Manual     - enter an IANA time-zone name, e.g. Asia/Dubai or America/Los_Angeles' -ForegroundColor White
 do { $timezoneChoice = Read-Host 'Select time zone [1-5]' } while ($timezoneChoice -notin @('1','2','3','4','5'))
 $timeZoneName = switch ($timezoneChoice) {
     '1' { 'Asia/Tehran' }
@@ -133,7 +136,7 @@ $timeZoneName = switch ($timezoneChoice) {
         while ($true) {
             $manualZone = Read-Required 'IANA time-zone name (case-sensitive; example Asia/Dubai)'
             if ($manualZone -match '^[A-Za-z_+-]+(?:/[A-Za-z0-9_+.-]+)+
-$scriptName = Read-Required 'RouterOS script name (scheduler will use the same name)' 'mikrotik-backup'
+$scriptName = Read-Required 'Name for the MikroTik backup script' 'mikrotik-backup'
 if ($scriptName -notmatch '^[A-Za-z0-9_-]{1,40}$') { throw 'Use 1-40 characters: English letters, numbers, dash or underscore.' }
 
 function Read-BackupTime([string]$label, [string]$defaultTime) {
@@ -148,13 +151,13 @@ Write-Host ''
 Write-Host 'BACKUP FREQUENCY' -ForegroundColor Cyan
 Write-Host '  1) Once per day'
 Write-Host '  2) Twice per day'
-do { $frequency = Read-Host 'How many backups per day? [1/2]' } while ($frequency -notin @('1','2'))
+do { $frequency = Read-Host 'Choose 1 or 2' } while ($frequency -notin @('1','2'))
 
 Write-Host ''
 Write-Host 'TIME SETUP' -ForegroundColor Cyan
 Write-Host '  1) Use default time(s): 00:00 (and 12:00 for twice daily)'
 Write-Host '  2) Enter custom time(s)'
-do { $timeMode = Read-Host 'Select default or custom time [1/2]' } while ($timeMode -notin @('1','2'))
+do { $timeMode = Read-Host 'Choose 1 or 2' } while ($timeMode -notin @('1','2'))
 
 if ($timeMode -eq '1') {
     $scheduleTimes = @('00:00:00')
@@ -173,7 +176,7 @@ Write-Host ''
 Write-Host 'Keep local backup after upload?' -ForegroundColor Cyan
 Write-Host '  Y) Yes, keep the local .backup file'
 Write-Host '  N) No, delete it only after successful delivery'
-do { $keepLocal = Read-Host 'Keep local file? [Y/N]' } while ($keepLocal -notmatch '^(?i:y|n)$')
+do { $keepLocal = Read-Host 'Choose Y or N' } while ($keepLocal -notmatch '^(?i:y|n)$')
 $deleteAfterUpload = $keepLocal -match '^(?i:n)$'
 
 $outDir = Join-Path $PSScriptRoot 'generated-output'
