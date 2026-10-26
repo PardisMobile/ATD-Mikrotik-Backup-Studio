@@ -27,16 +27,16 @@ fi
 NEED_PACKAGES=0
 command -v php >/dev/null 2>&1 || NEED_PACKAGES=1
 php -r 'exit(extension_loaded("curl") ? 0 : 1);' 2>/dev/null || NEED_PACKAGES=1
-for cmd in openssl socat setfacl python3; do command -v "$cmd" >/dev/null 2>&1 || NEED_PACKAGES=1; done
+for cmd in openssl socat setfacl python3 sudo visudo; do command -v "$cmd" >/dev/null 2>&1 || NEED_PACKAGES=1; done
 if [[ "$NEED_PACKAGES" -eq 1 ]]; then
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y
-    apt-get install -y php-cli php-curl openssl socat acl python3
+    apt-get install -y php-cli php-curl openssl socat acl python3 sudo
   elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y php-cli php-common php-curl openssl socat acl python3
+    dnf install -y php-cli php-common php-curl openssl socat acl python3 sudo
   elif command -v yum >/dev/null 2>&1; then
-    yum install -y php php-cli php-common php-curl openssl socat acl python3
+    yum install -y php php-cli php-common php-curl openssl socat acl python3 sudo
   else echo 'Supported package managers: apt, dnf, yum.' >&2; exit 5; fi
 else
   echo 'All required packages are already installed; skipping package installation.'
