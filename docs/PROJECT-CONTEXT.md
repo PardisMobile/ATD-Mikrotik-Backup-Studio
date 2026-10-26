@@ -148,3 +148,10 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - Successful install output shows the detected server IP URL and, when the Windows generator's SFTP host is a DNS name, a second hostname URL using the same public port. The SFTP host is used only as a hostname candidate because the generator instructs users to point SFTP at the same Linux server. DNS resolution and provider firewall reachability remain the operator's responsibility.
 
 - The terminal updater installs the independent system-time-zone helper and validates its sudoers rule immediately after PHP health validation, before Cron recovery. Failed Cron repair rolls back panel assets; installed-source-commit is written only after the full successful path as a plain SHA line.
+
+
+### User-confirmed known-good deployment baseline — 2026-10-27
+- **Commit `13cf0dd5fefcede571b7d6af66b1c9c2910093fc`** is explicitly identified by the user as the commit from the initial server installation where Telegram was working correctly.
+- Treat this commit as the known-good server-installation/Telegram behavior reference when auditing later changes. Do not rewrite, “improve,” or regress the Telegram test/send behavior without first comparing against this baseline and getting clear user approval for a behavior change.
+- The later commit `3615c0e0924c09b9844a55f48f818916bbcd8166` (“Handle Telegram test JSON without page refresh”) is also relevant to the panel's AJAX response path, but it does **not** replace the user-confirmed initial-install baseline above.
+- Preserve Telegram delivery settings, server-side sending, file discovery/stability checks, deduplication/retry behavior, and the AJAX test button behavior. Record any future Telegram-related code or test changes here, with the commit and explicit test status. Never describe unperformed live Telegram delivery as tested.
