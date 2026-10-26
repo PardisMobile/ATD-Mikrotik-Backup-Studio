@@ -78,7 +78,7 @@ for unit in "${LEGACY_UNITS[@]}"; do
   active=0; enabled=0
   systemctl is-active --quiet "$unit" 2>/dev/null && active=1 || true
   systemctl is-enabled --quiet "$unit" 2>/dev/null && enabled=1 || true
-  printf '%s %s %s\\n' "$unit" "$active" "$enabled" >> "$BACKUP/legacy-unit-states"
+  printf '%s %s %s\n' "$unit" "$active" "$enabled" >> "$BACKUP/legacy-unit-states"
 done
 
 for f in send-backup.php panel.css panel.js; do
@@ -108,10 +108,10 @@ rollback(){
 # and user data. A MISSING marker lets rollback remove only newly created files.
 for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer /etc/systemd/system/atd-mikrotik-backup-worker.service /etc/systemd/system/atd-mikrotik-backup-worker.timer /etc/systemd/system/atd-mikrotik-backup-scanner.service /etc/systemd/system/atd-mikrotik-backup-scanner.timer; do
   if [[ -e "$path" ]]; then
-    printf '%s\\n' "$path" >> "$BACKUP/snapshots.list"
+    printf '%s\n' "$path" >> "$BACKUP/snapshots.list"
     cp -a --parents "$path" "$BACKUP/"
   else
-    printf 'MISSING:%s\\n' "$path" >> "$BACKUP/snapshots.list"
+    printf 'MISSING:%s\n' "$path" >> "$BACKUP/snapshots.list"
   fi
 done
 
