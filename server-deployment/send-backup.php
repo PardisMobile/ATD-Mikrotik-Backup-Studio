@@ -264,6 +264,7 @@ function render_panel(): void {
     }
     $csrf=csrf_token();
     $systemTimezone=detected_system_timezone(); $selectedTimezone=selected_timezone();
+    date_default_timezone_set($systemTimezone);
     try { $serverNow=(new DateTimeImmutable('now',new DateTimeZone($systemTimezone)))->format('Y-m-d H:i:s'); } catch (Throwable $e) { $serverNow=date('Y-m-d H:i:s'); }
     $flash=$_SESSION['flash']??null; unset($_SESSION['flash']);
     $base=realpath(BACKUP_DIR); $files=[];
