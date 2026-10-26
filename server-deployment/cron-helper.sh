@@ -26,7 +26,7 @@ $times = is_array($saved) && isset($saved["backup_times"]) && is_array($saved["b
 $delay = is_array($saved) && isset($saved["delay_minutes"])
     ? (int)$saved["delay_minutes"]
     : (defined("TELEGRAM_DELAY_MINUTES") ? (int)TELEGRAM_DELAY_MINUTES : 2);
-$zone = (string)($state["_timezone"] ?? "UTC");
+$zone = (string)($state["_timezone"] ?? (defined("DEFAULT_TIMEZONE") ? DEFAULT_TIMEZONE : "UTC"));
 try { new DateTimeZone($zone); } catch (Throwable $e) { $zone = "UTC"; }
 echo implode(",", array_map(static fn($t) => substr((string)$t, 0, 5), $times)), "\n", $delay, "\n", $zone, "\n";
 ')" || { echo "Could not read saved delivery schedule." >&2; exit 5; }
