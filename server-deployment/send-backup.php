@@ -121,7 +121,7 @@ function normalize_backup_times(string $input): ?array {
     return $times;
 }
 function selected_timezone(): string {
-    $state = load_state(); $zone = (string)($state['_timezone'] ?? 'UTC');
+    $state = load_state(); $zone = (string)($state['_timezone'] ?? (defined('DEFAULT_TIMEZONE') ? DEFAULT_TIMEZONE : 'UTC'));
     try { new DateTimeZone($zone); return $zone; } catch (Throwable $e) { return 'UTC'; }
 }
 function detected_system_timezone(): string {
