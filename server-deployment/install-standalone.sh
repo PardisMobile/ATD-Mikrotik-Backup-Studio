@@ -9,7 +9,7 @@ if [[ -r /etc/os-release ]]; then
   . /etc/os-release
   if [[ "${ID:-}" == ubuntu ]]; then
     ver="${VERSION_ID:-0}"
-    if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+$ ]] || [[ "$(printf '%s\\n' 22.04 "$ver" | sort -V | head -n1)" != "22.04" ]]; then
+    if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+$ ]] || [[ "$(printf '%s\n' 22.04 "$ver" | sort -V | head -n1)" != "22.04" ]]; then
       echo "Ubuntu $ver is not supported by this installer. Use Ubuntu 22.04 LTS or newer." >&2; exit 5
     fi
   fi
