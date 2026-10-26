@@ -27,12 +27,13 @@ mkdir -m 0700 "$BACKUP"
 cleanup(){ rm -rf -- "$TMP"; }
 trap cleanup EXIT
 
-for f in send-backup.php panel.css panel.js cron-helper.sh; do
+for f in send-backup.php panel.css panel.js cron-helper.sh set-system-timezone.sh; do
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$f" -o "$TMP/$f"
   [[ -s "$TMP/$f" ]] || { echo "Downloaded asset is empty: $f" >&2; exit 5; }
 done
 php -l "$TMP/send-backup.php" >/dev/null || { echo 'New PHP code failed syntax validation; live files were not changed.' >&2; exit 6; }
 bash -n "$TMP/cron-helper.sh" || { echo 'New Cron helper failed shell syntax validation; live files were not changed.' >&2; exit 6; }
+bash -n "$TMP/set-system-timezone.sh" || { echo 'New system time-zone helper failed shell syntax validation; live files were not changed.' >&2; exit 6; }
 php -l "$TLS/config.php" >/dev/null || { echo 'Existing private configuration is invalid; live files were not changed.' >&2; exit 6; }
 grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-backup.php" || { echo 'Downloaded PHP does not use the separate private configuration schema; update aborted.' >&2; exit 6; }
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
@@ -173,6 +174,23 @@ ATD_LAUNCHER
   fi
 else
   echo 'Warning: sudo, visudo, or systemd-run is unavailable; panel-triggered updates are disabled.' >&2
+fi
+
+# Install the time-zone helper only after the existing application and Cron update succeeded.
+install -o root -g root -m 0750 "$TMP/set-system-timezone.sh" /usr/local/sbin/atd-mikrotik-backup-set-timezone
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
+  TIMEZONE_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-timezone.XXXXXX)
+  printf '%s\\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
+  chmod 0440 "$TIMEZONE_SUDOERS_TMP"
+  if visudo -cf "$TIMEZONE_SUDOERS_TMP" >/dev/null; then
+    install -o root -g root -m 0440 "$TIMEZONE_SUDOERS_TMP" /etc/sudoers.d/atd-panel-timezone
+    rm -f "$TIMEZONE_SUDOERS_TMP"
+  else
+    rm -f "$TIMEZONE_SUDOERS_TMP"
+    echo 'Warning: system time-zone control is disabled because its sudo rule failed validation.' >&2
+  fi
+else
+  echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
 fi
 
 echo "ATD application updated successfully."

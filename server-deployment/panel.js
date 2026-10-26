@@ -28,8 +28,8 @@
     document.documentElement.lang=parsed.documentElement.lang;
     document.documentElement.dir=parsed.documentElement.dir;
     history.replaceState({},'',response.url||url);
-    const newClock=document.getElementById('serverClock');
-    if(newClock)startClock(newClock);
+    applyPanelSection();
+    startClocks();
   }
   async function submitAjax(form){
     const isUpdateForm=form.classList.contains('update-form');
@@ -45,11 +45,24 @@
       document.title=parsed.title||document.title;
       document.documentElement.lang=parsed.documentElement.lang;document.documentElement.dir=parsed.documentElement.dir;
       if(response.url)history.replaceState({},'',response.url);
-      const clock=document.getElementById('serverClock');if(clock)startClock(clock);
+      applyPanelSection();
+      startClocks();
+      if(isUpdateForm)pollUpdateStatus();
     }catch(error){showMessage('Operation failed: '+error.message,false)}
     finally{submitters.forEach(b=>{b.disabled=false;b.classList.remove('is-loading')})}
   }
   let clockTimer=null;
+  function applyPanelSection(){
+    const allowed=['dashboard','backups','telegram','settings'];
+    let active=safeGet('atd-panel-section');if(!allowed.includes(active))active='dashboard';
+    document.querySelectorAll('[data-panel-section]').forEach(section=>{section.hidden=section.dataset.panelSection!==active;});
+    document.querySelectorAll('[data-panel-tab]').forEach(tab=>{const selected=tab.dataset.panelTab===active;tab.setAttribute('aria-current',selected?'page':'false');tab.classList.toggle('is-active',selected);});
+  }
+  function setPanelSection(name){
+    if(!['dashboard','backups','telegram','settings'].includes(name))return;
+    try{localStorage.setItem('atd-panel-section',name)}catch(e){}
+    applyPanelSection();
+  }
   async function pollUpdateStatus(){
     const target=document.getElementById('updateStatus');if(!target)return;
     target.textContent='Update requested. Waiting for the updater…';
@@ -68,23 +81,25 @@
     }
     target.textContent='Update status is taking longer than expected. Check again in a moment.';
   }
-  function startClock(el){
-    if(clockTimer!==null)clearInterval(clockTimer);
-    if(el.dataset.clockStarted==='1')return;el.dataset.clockStarted='1';
-    const zone=el.dataset.timezone||'UTC';let base=parseInt(el.dataset.epoch||'0',10);if(!base)return;
-    const render=()=>{
-      const date=new Date(base*1000);
-      try{
-        const parts=new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date);
-        const v={};parts.forEach(p=>{v[p.type]=p.value});
-        el.textContent=v.year+'-'+v.month+'-'+v.day+' '+v.hour+':'+v.minute+':'+v.second;
-      }catch(e){}
-      base++;
-    };
-    render();clockTimer=setInterval(render,1000);
+  function renderClock(el){
+    const epoch=parseInt(el.dataset.epoch||'0',10);if(!epoch)return;
+    const zone=el.dataset.timezone||'UTC';const date=new Date(epoch*1000);
+    try{
+      const parts=new Intl.DateTimeFormat('en-GB',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(date);
+      const v={};parts.forEach(p=>{v[p.type]=p.value});
+      el.textContent=v.year+'-'+v.month+'-'+v.day+' '+v.hour+':'+v.minute+':'+v.second;
+    }catch(e){el.textContent='Time unavailable'}
+    el.dataset.epoch=String(epoch+1);
   }
-  const clock=document.getElementById('serverClock');if(clock)startClock(clock);
+  function startClocks(){
+    document.querySelectorAll('[data-server-clock]').forEach(renderClock);
+    if(clockTimer!==null)clearInterval(clockTimer);
+    clockTimer=setInterval(()=>document.querySelectorAll('[data-server-clock]').forEach(renderClock),1000);
+  }
+  applyPanelSection();
+  startClocks();
   document.addEventListener('click',async function(event){
+    const tab=event.target.closest('[data-panel-tab]');if(tab){setPanelSection(tab.dataset.panelTab);return}
     const theme=event.target.closest('#themeToggle');
     if(theme){const dark=root.dataset.theme!=='dark';if(dark)root.dataset.theme='dark';else delete root.dataset.theme;try{localStorage.setItem('atd-theme',dark?'dark':'light')}catch(e){}return}
     const accent=event.target.closest('[data-accent]');if(accent){setAccent(accent.dataset.accent);return}

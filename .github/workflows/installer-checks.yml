@@ -14,6 +14,9 @@ jobs:
       - name: Check Bash syntax
         run: |
           bash -n server-deployment/install-standalone.sh
+          bash -n server-deployment/update-standalone.sh
+          bash -n server-deployment/cron-helper.sh
+          bash -n server-deployment/set-system-timezone.sh
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:

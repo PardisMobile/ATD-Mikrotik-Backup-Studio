@@ -93,7 +93,16 @@ jobs:
               raise SystemExit("RouterOS script must retain the SFTP-only workflow and must not call the panel")
           if "api.telegram.org" in router_script or "telegramOK" in router_script:
               raise SystemExit("RouterOS must never call Telegram directly")
+          helper = Path("server-deployment/set-system-timezone.sh").read_text(encoding="utf-8")
+          if "timedatectl set-timezone" not in helper or "realpath -e" not in helper:
+              raise SystemExit("System time-zone helper must validate the installed zone and use timedatectl.")
+          if "atd-mikrotik-backup-set-timezone" not in Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8"):
+              raise SystemExit("Installer must install the restricted system time-zone helper.")
+          if "set-system-timezone.sh" not in Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8"):
+              raise SystemExit("Updater must stage the system time-zone helper.")
           php = Path("server-deployment/send-backup.php").read_text(encoding="utf-8")
+          if 'data-panel-tab="dashboard"' not in php or "serverClockTop" not in php:
+              raise SystemExit("Panel must include section navigation and the top-bar live clock.")
           if "in_array('--scan-backups', $argv ?? [], true)" not in php or "function send_telegram_file(" not in php:
               raise SystemExit("PHP must provide the automatic CLI scanner and Telegram sender")
           if "STABILITY_CHECKS = 2" not in php:
@@ -168,6 +177,7 @@ jobs:
         run: |
           bash -n server-deployment/install-standalone.sh
           bash -n server-deployment/update-standalone.sh
+          bash -n server-deployment/set-system-timezone.sh
           bash -n server-deployment/uninstall-standalone.sh
 
   powershell-parse:

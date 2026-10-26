@@ -75,7 +75,7 @@ This section records the user's current requirements and the latest attempted ch
   4. USA — `America/New_York`
   5. Manual — user enters an IANA time-zone name, e.g. `Asia/Dubai` or `America/Los_Angeles`
 - Label option 4 simply “USA”; do not add “Washington DC”.
-- The selection should be asked once and used consistently for RouterOS and Linux-side configuration. Explain that the Linux system clock and RouterOS clock are distinct; do not silently change the operating-system time zone or claim synchronization unless the actual implementation does it correctly.
+- The Windows generator's selected zone is stored for the RouterOS script and Linux-side Cron schedule; installation must not silently change the host-wide system time zone. In panel Settings, the administrator may explicitly apply a zone to the Linux host and Cron using the restricted root-owned `timedatectl set-timezone` helper. This changes timezone presentation, not the system clock or NTP state. RouterOS uses its own clock/time-zone setting, so if the zone is changed after installation, show a clear warning to align RouterOS `time-zone-name` as well.
 - Keep existing backup frequency, custom times, SFTP settings, public port, panel password, and local-file-retention prompts/behavior intact.
 - Keep the generated output/package synchronized with canonical server files. Embedded PHP/CSS/JS/cron assets inside the PowerShell generator must match their canonical files under `server-deployment/`, unless the project intentionally documents a different versioning mechanism.
 
@@ -132,3 +132,10 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 4. Review relevant official MikroTik and Ubuntu documentation for every RouterOS/system command used.
 5. Report in Persian, concisely: what is already correct, what is incomplete or risky, what CI proves, what remains untested, and a prioritized safe recovery plan.
 6. Do not commit further changes until the audit identifies a safe plan and the user authorizes implementation.
+
+
+### Implemented panel enhancements — 2026-10-26
+- Panel sections: Dashboard, Backups, Telegram, and Settings. The UI continues to render server-side; navigation hides/shows grouped sections without changing action endpoints or CSRF handling.
+- A live Linux date/time clock appears in the top bar. The settings card also shows the detected system zone.
+- The timezone selector applies the selected zone to the Linux host only after explicit user submission, using a root-owned helper that accepts no command-line arguments and validates a zone against `/usr/share/zoneinfo`. The same selected zone remains the `CRON_TZ` zone. This does not change the actual system clock, NTP configuration, or RouterOS settings.
+- The panel footer already contains “Code by Amir Taheri” linked to the approved WhatsApp URL; do not duplicate or rewrite it unnecessarily.

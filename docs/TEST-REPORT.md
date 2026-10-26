@@ -1,6 +1,6 @@
 # Test report and current verification status
 
-Last reviewed: 2026-10-25.
+Last reviewed: 2026-10-26.
 
 ## Repository-level implementation review
 - The Windows generator creates a customer-specific `install.sh` in Telegram/Panel mode. It embeds only the first-run private config payload; panel assets are downloaded from GitHub at install time.
@@ -46,3 +46,12 @@ Do not describe the project as production-ready until the latest CI checks pass 
 - Fixed a re-install mismatch: the runtime installer now derives `BACKUP_DIR` from the preserved private config, not the newly generated package. This prevents the service sandbox/ACLs from pointing at a different directory than the app actually uses.
 - Updated CI invariants and GitHub update documentation to reflect this architecture.
 - Still required: inspect the push-triggered workflow result for the newest commit, execute the generated PowerShell on Windows, and run clean-install/reinstall/update/rollback tests on a disposable Linux VM. No real-server end-to-end test has been performed in this review.
+
+
+## Panel enhancement batch (2026-10-26)
+
+- Added section navigation for Dashboard, Backups, Telegram, and Settings while retaining server-rendered sections and existing POST/CSRF handling.
+- Added a live clock in the top bar; the existing clock display remains available in Settings.
+- Time-zone settings use a narrowly scoped root-owned helper to call timedatectl set-timezone, validate the installed IANA zone, and preserve the existing Linux Cron schedule setting. The actual system clock is not set manually and NTP is not changed.
+- Updated accent-aware UI styling and README guidance. The footer already displayed “Code by Amir Taheri” with the approved WhatsApp link before this batch.
+- Static checks must pass on the resulting commit. A live Ubuntu server, RouterOS router, and real Telegram/SFTP end-to-end test have not been run from this change session.

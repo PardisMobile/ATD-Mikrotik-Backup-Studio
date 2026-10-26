@@ -222,6 +222,27 @@ if [[ ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
   rm -f -- "$COMMIT_TMP"
 fi
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable updater source commit.' >&2; exit 9; }
+# Install a narrowly scoped helper that can change only the Linux system time zone.
+TIMEZONE_HELPER_TMP=$(mktemp)
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+  "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$SOURCE_COMMIT/server-deployment/set-system-timezone.sh" -o "$TIMEZONE_HELPER_TMP"
+bash -n "$TIMEZONE_HELPER_TMP" || { rm -f "$TIMEZONE_HELPER_TMP"; echo 'Time-zone helper failed syntax validation.' >&2; exit 9; }
+install -o root -g root -m 0750 "$TIMEZONE_HELPER_TMP" /usr/local/sbin/atd-mikrotik-backup-set-timezone
+rm -f "$TIMEZONE_HELPER_TMP"
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
+  TIMEZONE_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-timezone.XXXXXX)
+  printf '%s\\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
+  chmod 0440 "$TIMEZONE_SUDOERS_TMP"
+  if visudo -cf "$TIMEZONE_SUDOERS_TMP" >/dev/null; then
+    install -o root -g root -m 0440 "$TIMEZONE_SUDOERS_TMP" /etc/sudoers.d/atd-panel-timezone
+    rm -f "$TIMEZONE_SUDOERS_TMP"
+  else
+    rm -f "$TIMEZONE_SUDOERS_TMP"
+    echo 'Warning: system time-zone control is disabled because its sudo rule failed validation.' >&2
+  fi
+else
+  echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
+fi
 UPDATE_TMP=$(mktemp)
 trap 'rm -f -- "$UPDATE_TMP"' EXIT
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \

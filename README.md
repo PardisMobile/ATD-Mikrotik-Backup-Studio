@@ -8,7 +8,9 @@ ATD MikroTik Backup Studio creates scheduled MikroTik RouterOS 7 backups, upload
 - Supports selecting old backup files for confirmed deletion.
 - Allows changing the panel password.
 - Lets you configure or replace the Telegram Bot Token and destination Chat ID inside the panel, with direct setup guides for `@BotFather` and `@userinfobot`.
-- Persian/English interface, light/dark theme, and responsive layout.
+- Persian/English interface, light/dark theme, responsive layout, and section-based navigation (Dashboard, Backups, Telegram, Settings).
+- Live Linux server date/time shown at the top of the panel.
+- Configurable Linux system time zone and matching Cron schedule zone through a restricted root-owned helper; this changes the time zone, not the system clock itself. RouterOS has a separate clock/time-zone setting, so changing zones after installation also requires aligning RouterOS.
 - Stores the backup time(s) selected in the Windows generator and schedules Linux-side Telegram scans after a configurable delay (default: 2 minutes), with a six-minute retry window.
 - Provides one **Test Telegram connection** action that sends the newest existing `.backup` file; there is no separate text-only test or per-file send button.
 - Keeps first-run settings and delivery state separate from updateable application code.
@@ -55,6 +57,9 @@ The generator also creates `create-sftp-directory.txt`, containing a command for
 - `paste-into-routeros-terminal.txt`: complete RouterOS script and scheduler setup.
 - `install.sh`: private server bootstrap, generated only in Telegram/Panel mode.
 - `create-sftp-directory.txt`: command to create the configured SFTP directory.
+
+## Time zone and clock
+The panel displays the Linux server's live date/time and detected system time zone. In Settings, selecting a supported IANA time zone applies it to the Linux host with timedatectl set-timezone and saves the same zone for the Linux Cron schedule. This changes the host's system-wide time-zone setting but does not manually change the clock or disable NTP. RouterOS Scheduler uses the router's own clock/time-zone configuration; if the zone is changed after initial setup, align the router's time-zone-name as well. See the official MikroTik Clock documentation (https://help.mikrotik.com/docs/spaces/ROS/pages/40992866/Clock) and Ubuntu timedatectl manual (https://manpages.ubuntu.com/manpages/jammy/man1/timedatectl.1.html).
 
 ## Update
 To update an existing installation, run `sudo atd-mikrotik-backup-update`. The updater stages and syntax-checks the application, backs up the previous code, preserves private configuration, delivery state, and uploaded backups, removes obsolete ATD-only worker/timer units, and reapplies the dedicated Cron entry from saved delivery settings. It does not edit RouterOS scripts, third-party web-server configuration, or firewall rules.
