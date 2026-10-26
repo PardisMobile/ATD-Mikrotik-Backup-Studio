@@ -5,7 +5,6 @@ function Read-Required([string]$Prompt, [string]$Default = '') {
     while ($true) {
         $display = if ($Default) { "$Prompt [$Default]" } else { $Prompt }
         Write-Host $display -ForegroundColor Cyan -NoNewline
-        Write-Host ''
         $v = Read-Host
         if ($Default -and [string]::IsNullOrWhiteSpace($v)) { $v = $Default }
         if (-not [string]::IsNullOrWhiteSpace($v)) { return $v.Trim() }
