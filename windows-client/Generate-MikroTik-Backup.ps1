@@ -589,7 +589,14 @@ function render_panel(): void {
                 } else $_SESSION['flash']=['ok'=>true,'message'=>'DELIVERY_SCHEDULE_SAVED (Cron applies within one minute)'];
             }
         }
-        header('Location: '.($_SERVER['SCRIPT_NAME']??'/send-backup.php')); exit;
+        if ($action==='telegram_test' && strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH']??''))==='xmlhttprequest') {
+            $flash=$_SESSION['flash']??['ok'=>false,'message'=>'TELEGRAM_TEST_FAILED'];
+            unset($_SESSION['flash']);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['ok'=>!empty($flash['ok']),'message'=>(string)($flash['message']??'TELEGRAM_TEST_FAILED')], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+        header('Location: '.$_SERVER['PHP_SELF']); exit;
     }
     $csrf=csrf_token();
     $systemTimezone=detected_system_timezone(); $selectedTimezone=selected_timezone();
@@ -916,6 +923,11 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
     try{
       const response=await fetch(form.action||location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
       if(!response.ok)throw new Error('Request failed ('+response.status+')');
+      if(form.querySelector('[name="action"]')?.value==='telegram_test'){
+        const data=await response.json();
+        showMessage(data.message||'Telegram test finished.',!!data.ok);
+        return;
+      }
       const html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html');
       const updateStarted=isUpdateForm&&(parsed.querySelector('.alert')?.textContent||'').includes('UPDATE_STARTED');
       const fresh=parsed.querySelector('.app-shell'),current=document.querySelector('.app-shell');
