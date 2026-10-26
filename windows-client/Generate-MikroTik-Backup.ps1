@@ -134,7 +134,17 @@ $timeZoneName = switch ($timezoneChoice) {
     '5' {
         while ($true) {
             $manualZone = Read-Required 'IANA time-zone name (case-sensitive; example Asia/Dubai)'
-            if (($manualZone -match '^[A-Za-z_+-]+(?:/[A-Za-z0-9_+.-]+)+
+            if (($manualZone -match '^[A-Za-z_+-]+(?:/[A-Za-z0-9_+.-]+)+$') -or ($manualZone -eq 'UTC')) { break }
+            Write-Host 'Invalid format. Use an IANA name such as Asia/Dubai, Europe/Paris, America/Los_Angeles, or UTC.' -ForegroundColor Yellow
+        }
+        $manualZone
+    }
+}
+Write-Host ("Selected time zone: {0}" -f $timeZoneName) -ForegroundColor Green
+Write-Host 'Note: RouterOS must support this time-zone name. Verify the router clock after setup.' -ForegroundColor DarkGray
+Write-Host ''
+Write-Host 'SCHEDULER SETTINGS' -ForegroundColor Cyan
+$scriptName = Read-Required 'Name for the MikroTik backup script' 'mikrotik-backup'
 if ($scriptName -notmatch '^[A-Za-z0-9_-]{1,40}$') { throw 'Use 1-40 characters: English letters, numbers, dash or underscore.' }
 
 function Read-BackupTime([string]$label, [string]$defaultTime) {
