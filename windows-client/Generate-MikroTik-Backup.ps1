@@ -430,14 +430,24 @@ function detected_system_timezone(): string {
     if (is_string($configured) && trim($configured) !== '') { $zone=trim($configured); try { new DateTimeZone($zone); return $zone; } catch (Throwable $e) {} }
     return date_default_timezone_get();
 }
-function latest_github_commit(): ?string {
-    if (!function_exists('curl_init')) return null;
-    $ch=curl_init('https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main');
-    curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2,CURLOPT_HTTPHEADER=>['Accept: application/vnd.github+json','User-Agent: ATD-MikroTik-Backup-Studio']]);
-    $body=curl_exec($ch); $error=curl_error($ch); $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch);
-    if ($error!=='' || $http!==200 || !is_string($body)) return null;
-    $data=json_decode($body,true); $sha=is_array($data)?(string)($data['sha']??''):'';
-    return preg_match('/\\A[0-9a-f]{40}\\z/',$sha)?$sha:null;
+function latest_github_commit(): array {
+    if (!function_exists('curl_init')) return ['sha'=>null,'reason'=>'PHP cURL extension is unavailable.'];
+    $endpoints=[
+        ['url'=>'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main','type'=>'api'],
+        ['url'=>'https://github.com/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main.atom','type'=>'atom']
+    ];
+    $reasons=[];
+    foreach($endpoints as $endpoint){
+        $ch=curl_init($endpoint['url']);
+        curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_TIMEOUT=>12,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_MAXREDIRS=>3,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2,CURLOPT_HTTPHEADER=>['User-Agent: ATD-MikroTik-Backup-Studio']]);
+        $body=curl_exec($ch); $error=curl_error($ch); $http=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE); curl_close($ch);
+        if($error!=='' || $http!==200 || !is_string($body)){ $reasons[]=$endpoint['type'].': '.($error!==''?'network/TLS error':('HTTP '.$http)); continue; }
+        if($endpoint['type']==='api'){ $data=json_decode($body,true); $sha=is_array($data)?(string)($data['sha']??''):''; }
+        else { $sha=''; if(preg_match('/<id>tag:github\\.com,2008:Grit::Commit\\/[0-9a-f]{40}\\.([0-9a-f]{40})<\\/id>/',$body,$m))$sha=$m[1]; if($sha===''&&preg_match('/<id>tag:github\\.com,2008:Grit::Commit\\/([0-9a-f]{40})<\\/id>/',$body,$m))$sha=$m[1]; }
+        if(preg_match('/\\A[0-9a-f]{40}\\z/',$sha))return ['sha'=>$sha,'reason'=>''];
+        $reasons[]=$endpoint['type'].': response format not recognized';
+    }
+    return ['sha'=>null,'reason'=>implode('; ',$reasons)];
 }
 function installed_source_commit(): ?string {
     $path=dirname(STATE_FILE).'/installed-source-commit';
@@ -469,8 +479,8 @@ function render_panel(): void {
     }
     if (($_GET['ajax'] ?? '') === 'check_update' && !empty($_SESSION['admin'])) {
         header('Content-Type: application/json; charset=utf-8');
-        $latest=latest_github_commit(); $installed=installed_source_commit();
-        if ($latest===null) { echo json_encode(['status'=>'error','message'=>'GitHub could not be reached. Try again later.']); exit; }
+        $check=latest_github_commit(); $latest=$check['sha']; $installed=installed_source_commit();
+        if ($latest===null) { echo json_encode(['status'=>'error','message'=>'GitHub check failed from the server. '.$check['reason']]); exit; }
         if ($installed===null) { echo json_encode(['status'=>'unknown','latest'=>$latest,'installed'=>null,'update_available'=>true,'message'=>'Installed version is not recorded yet; an update/migration run is recommended.']); exit; }
         echo json_encode(['status'=>$latest===$installed?'current':'available','latest'=>$latest,'installed'=>$installed,'update_available'=>$latest!==$installed]); exit;
     }
@@ -535,7 +545,7 @@ function render_panel(): void {
             } elseif (!cron_apply_worker_available()) {
                 $_SESSION['flash']=['ok'=>false,'message'=>'CRON_UPDATE_WORKER_MISSING'];
             } elseif (!is_executable('/usr/bin/sudo') || !is_executable('/usr/local/sbin/atd-mikrotik-backup-set-timezone')) {
-                $_SESSION['flash']=['ok'=>false,'message'=>'SYSTEM_TIMEZONE_HELPER_MISSING'];
+                $_SESSION['flash']=['ok'=>false,'message'=>'SYSTEM_TIMEZONE_HELPER_MISSING: run sudo atd-mikrotik-backup-update in the Ubuntu terminal, then retry.'];
             } else {
                 $st=load_state(); $oldZone=$st['_timezone']??null;
                 $st['_timezone']=$zone; $st['_timezone_updated_at']=gmdate('c');
@@ -832,6 +842,24 @@ html[data-theme="dark"] .welcome-strip{background:linear-gradient(110deg,color-m
 html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in srgb,var(--blue) 16%,var(--surface))}
 
 .sort-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);text-decoration:none;white-space:nowrap;transition:color .18s}.sort-link:hover,.sort-link.is-active{color:var(--blue)}.sort-link span{font-size:11px;opacity:.8}.sort-link.is-active span{font-weight:800}
+
+/* Settings layout: clear spacing and responsive action groups. */
+.update-panel{margin-bottom:26px}
+.update-actions{display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;padding:22px 24px 12px}
+.update-actions .update-form{display:flex;align-items:center;gap:12px;flex:1 1 320px;min-width:0;padding:0;margin:0}
+.update-actions .update-form .btn{flex:0 0 auto}
+.update-actions .update-form small{flex:1 1 100%;margin-top:2px;line-height:1.7}
+#checkUpdateStatus{display:block;margin:0 24px 22px;line-height:1.7}
+.timezone-panel{margin-bottom:28px}
+.timezone-form{row-gap:16px}
+.timezone-form .btn{min-height:42px}
+@media(max-width:760px){
+ .update-actions{padding:17px 15px 10px;gap:13px;flex-direction:column;align-items:stretch}
+ .update-actions .update-form{width:100%;flex:1 1 auto;gap:10px;flex-direction:column;align-items:stretch}
+ .update-actions .update-form .btn,#checkUpdates{width:100%}
+ #checkUpdateStatus{margin:0 15px 18px}
+ .update-panel,.timezone-panel{margin-bottom:20px}
+}
 '@
     $js = @'
 (function(){
