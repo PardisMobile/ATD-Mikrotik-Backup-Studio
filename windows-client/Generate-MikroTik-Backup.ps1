@@ -585,6 +585,7 @@ const MAX_FILE_BYTES = $maxBytes;
 const PUBLIC_PORT = $publicPort;
 const BACKUP_SCHEDULE_TIMES = [$schedulePhp];
 const TELEGRAM_DELAY_MINUTES = 2;
+const DEFAULT_TIMEZONE = '$timeZoneName';
 "@
     $configB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($configPhp))
 
@@ -1276,6 +1277,7 @@ const MAX_FILE_BYTES = $maxBytes;
 const PUBLIC_PORT = $publicPort;
 const BACKUP_SCHEDULE_TIMES = [$schedulePhp];
 const TELEGRAM_DELAY_MINUTES = 2;
+const DEFAULT_TIMEZONE = '$timeZoneName';
 "@
     $configB64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($configPhp))
 
