@@ -35,10 +35,21 @@ trap cleanup EXIT
 # touching code. The update must stop them during replacement and restore state.
 PHP_WAS_ACTIVE=0; TLS_WAS_ACTIVE=0
 PHP_WAS_ENABLED=0; TLS_WAS_ENABLED=0
+CRON_UNIT=""
+CRON_WAS_ACTIVE=0; CRON_WAS_ENABLED=0
 systemctl is-active --quiet atd-mikrotik-backup-php.service && PHP_WAS_ACTIVE=1 || true
 systemctl is-active --quiet atd-mikrotik-backup-tls.service && TLS_WAS_ACTIVE=1 || true
 systemctl is-enabled --quiet atd-mikrotik-backup-php.service && PHP_WAS_ENABLED=1 || true
 systemctl is-enabled --quiet atd-mikrotik-backup-tls.service && TLS_WAS_ENABLED=1 || true
+if systemctl cat cron.service >/dev/null 2>&1; then
+  CRON_UNIT=cron.service
+elif systemctl cat crond.service >/dev/null 2>&1; then
+  CRON_UNIT=crond.service
+fi
+if [[ -n "$CRON_UNIT" ]]; then
+  systemctl is-active --quiet "$CRON_UNIT" && CRON_WAS_ACTIVE=1 || true
+  systemctl is-enabled --quiet "$CRON_UNIT" && CRON_WAS_ENABLED=1 || true
+fi
 
 for f in send-backup.php panel.css panel.js cron-helper.sh set-system-timezone.sh; do
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$f" -o "$TMP/$f"
@@ -95,7 +106,7 @@ rollback(){
 
 # Snapshot every ATD-owned file this script can replace, excluding private config
 # and user data. A MISSING marker lets rollback remove only newly created files.
-for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/sudoers.d/atd-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer /etc/systemd/system/atd-mikrotik-backup-worker.service /etc/systemd/system/atd-mikrotik-backup-worker.timer /etc/systemd/system/atd-mikrotik-backup-scanner.service /etc/systemd/system/atd-mikrotik-backup-scanner.timer; do
+for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer /etc/systemd/system/atd-mikrotik-backup-worker.service /etc/systemd/system/atd-mikrotik-backup-worker.timer /etc/systemd/system/atd-mikrotik-backup-scanner.service /etc/systemd/system/atd-mikrotik-backup-scanner.timer; do
   if [[ -e "$path" ]]; then
     printf '%s\\n' "$path" >> "$BACKUP/snapshots.list"
     cp -a --parents "$path" "$BACKUP/"
@@ -136,6 +147,12 @@ rollback(){
   if (( TLS_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
   if (( PHP_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-php.service 2>/dev/null || true; fi
   if (( TLS_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
+  # Cron is part of the updater's transaction too: restore its pre-update
+  # enabled/active state rather than leaving a host daemon changed on rollback.
+  if [[ -n "$CRON_UNIT" ]]; then
+    if (( CRON_WAS_ENABLED )); then systemctl enable "$CRON_UNIT" 2>/dev/null || true; else systemctl disable "$CRON_UNIT" 2>/dev/null || true; fi
+    if (( CRON_WAS_ACTIVE )); then systemctl start "$CRON_UNIT" 2>/dev/null || true; else systemctl stop "$CRON_UNIT" 2>/dev/null || true; fi
+  fi
   UPDATE_TRANSACTION=0
 }
 trap 'if (( UPDATE_TRANSACTION )); then rollback; fi' ERR
