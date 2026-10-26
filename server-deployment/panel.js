@@ -99,10 +99,17 @@
     if(!form.querySelector('[name="csrf"]'))return;
     event.preventDefault();submitAjax(form);
   });
+  let searchTimer=null;
   document.addEventListener('input',function(event){
     const search=event.target.closest('#backupSearch');if(!search)return;
-    const q=search.value.trim().toLocaleLowerCase();
-    document.querySelectorAll('#backupTable tbody tr[data-search]').forEach(row=>{row.hidden=!row.dataset.search.toLocaleLowerCase().includes(q)});
+    const value=search.value;
+    if(searchTimer!==null)clearTimeout(searchTimer);
+    searchTimer=setTimeout(async function(){
+      const url=new URL(location.href);url.searchParams.set('page','1');
+      if(value.trim())url.searchParams.set('q',value.trim());else url.searchParams.delete('q');
+      const caret=value.length;
+      try{await loadPage(url.toString());const next=document.getElementById('backupSearch');if(next){next.focus();next.setSelectionRange(caret,caret)}}catch(e){showMessage('Search failed: '+e.message,false)}
+    },300);
   });
   document.addEventListener('change',function(event){
     const select=event.target.closest('select[name="timezone"]');if(!select)return;
