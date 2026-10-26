@@ -52,9 +52,23 @@ grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
 grep -q 'TELEGRAM_NOT_CONFIGURED' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks Telegram setup checks; update aborted.' >&2; exit 6; }
 
-# Do not remove, disable, or rewrite legacy ATD unit files during an application update.
-# Existing service state may be part of the user's working Telegram delivery setup.
-# Migration/cleanup must be a separate, explicitly validated operation.
+# This release migrates the obsolete systemd scanner/worker timers to the ATD-owned
+# Cron scanner. Stage/validate every replacement asset and snapshot each legacy
+# unit plus its active/enabled state before disabling/removing it.
+
+LEGACY_UNITS=(
+  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
+  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
+  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
+  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
+)
+: > "$BACKUP/legacy-unit-states"
+for unit in "${LEGACY_UNITS[@]}"; do
+  active=0; enabled=0
+  systemctl is-active --quiet "$unit" 2>/dev/null && active=1 || true
+  systemctl is-enabled --quiet "$unit" 2>/dev/null && enabled=1 || true
+  printf '%s %s %s\\n' "$unit" "$active" "$enabled" >> "$BACKUP/legacy-unit-states"
+done
 
 for f in send-backup.php panel.css panel.js; do
   [[ -f "$APP/$f" ]] && cp -p "$APP/$f" "$BACKUP/$f"
@@ -110,6 +124,14 @@ rollback(){
   chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
   chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   systemctl daemon-reload 2>/dev/null || true
+  # Reconstitute the old systemd migration state if any later update step failed.
+  if [[ -s "$BACKUP/legacy-unit-states" ]]; then
+    while read -r unit active enabled; do
+      [[ -n "$unit" ]] || continue
+      if (( enabled )); then systemctl enable "$unit" 2>/dev/null || true; else systemctl disable "$unit" 2>/dev/null || true; fi
+      if (( active )); then systemctl start "$unit" 2>/dev/null || true; else systemctl stop "$unit" 2>/dev/null || true; fi
+    done < "$BACKUP/legacy-unit-states"
+  fi
   if (( PHP_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-php.service 2>/dev/null || true; fi
   if (( TLS_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
   if (( PHP_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-php.service 2>/dev/null || true; fi
@@ -118,9 +140,18 @@ rollback(){
 }
 trap 'if (( UPDATE_TRANSACTION )); then rollback; fi' ERR
 
-# Stop only ATD's application services while replacing live assets.
+# Stop ATD's web services while replacing app files. Then migrate old scanner
+# units only after all downloaded assets have passed validation and are backed up.
 if (( PHP_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-php.service; fi
 if (( TLS_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-tls.service; fi
+for unit in "${LEGACY_UNITS[@]}"; do
+  unit_file="/etc/systemd/system/$unit"
+  if systemctl cat "$unit" >/dev/null 2>&1 || [[ -e "$unit_file" ]]; then
+    systemctl disable --now "$unit" 2>/dev/null || true
+    rm -f -- "$unit_file"
+  fi
+done
+systemctl daemon-reload
 install -o root -g root -m 0750 "$TMP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
 cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
 * * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
