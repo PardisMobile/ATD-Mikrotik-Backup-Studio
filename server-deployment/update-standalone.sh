@@ -39,26 +39,16 @@ grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
 grep -q 'TELEGRAM_NOT_CONFIGURED' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks Telegram setup checks; update aborted.' >&2; exit 6; }
 
-# Do not disable legacy services or touch live files until all replacement assets validate.
-LEGACY_UNITS=(
-  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
-  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
-  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
-  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
-)
-for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
-systemctl daemon-reload
+# Do not remove, disable, or rewrite legacy ATD unit files during an application update.
+# Existing service state may be part of the user's working Telegram delivery setup.
+# Migration/cleanup must be a separate, explicitly validated operation.
 
 for f in send-backup.php panel.css panel.js; do
   [[ -f "$APP/$f" ]] && cp -p "$APP/$f" "$BACKUP/$f"
 done
 rollback(){
   echo 'Update failed; restoring previous ATD application files.' >&2
-  for unit in atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer; do
-    systemctl disable --now "$unit" 2>/dev/null || true
-    rm -f "/etc/systemd/system/$unit"
-  done
-  systemctl daemon-reload 2>/dev/null || true
+  # Leave existing unit files and their enabled/active state untouched.
   for f in send-backup.php panel.css panel.js; do
     if [[ -f "$BACKUP/$f" ]]; then cp -p "$BACKUP/$f" "$APP/$f"
     else rm -f -- "$APP/$f"; fi

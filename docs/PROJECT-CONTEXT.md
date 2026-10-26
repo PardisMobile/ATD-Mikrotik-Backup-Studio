@@ -171,3 +171,9 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - The installed-source commit marker and final success messaging need to be committed only after all required actions and post-update health checks succeed. The self-update path must also report download/install failure rather than silently leave a stale updater.
 - Preserve the existing AJAX Telegram Test contract and the known-good Telegram behavior documented above. This audit does not change Telegram behavior and does not represent a live server test.
 - Next implementation must stage and validate all artifacts first, capture owned files plus previous service/cron/sudoers states, apply updates within one rollback boundary, restore the exact previous state on failure, and avoid removing legacy units unless their ownership and migration are explicitly verified. Add syntax/CI tests and document that live Ubuntu/Telegram checks remain outstanding until performed.
+
+
+### Updater implementation fix — 2026-10-27
+- Updated `server-deployment/update-standalone.sh` to stop deleting/disabling legacy ATD Telegram/worker/scanner unit files during a code update, and to stop repeating that destructive cleanup during its rollback. This avoids altering a user's pre-existing service state as a side effect of an application refresh.
+- The existing updater rollback remains limited and is **not** yet a complete transaction across all late Cron/helper/sudoers operations. Do not claim the updater is fully rollback-safe or production validated; remaining work includes a complete transaction boundary and tests. Telegram sender and AJAX test implementation were not changed.
+- Validation performed for this commit: reviewed the source transformation and checked the resulting script syntax (reported only if the check passes); no live Linux update or Telegram test was run.
