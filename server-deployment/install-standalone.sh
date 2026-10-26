@@ -230,6 +230,54 @@ curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-ti
 bash -n "$UPDATE_TMP" || { echo 'Downloaded updater failed shell syntax validation.' >&2; exit 9; }
 install -o root -g root -m 0750 "$UPDATE_TMP" /usr/local/sbin/atd-mikrotik-backup-update
 
+
+# Install a narrowly-scoped root launcher so the panel can start only the fixed ATD updater.
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1; then
+  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update-worker <<'ATD_WORKER'
+#!/usr/bin/env bash
+set +e
+STATE=/var/lib/atd-mikrotik-backup-studio
+/usr/local/sbin/atd-mikrotik-backup-update > "$STATE/panel-update.log" 2>&1
+rc=$?
+if [[ "$rc" -eq 0 ]]; then status=success; else status=failed; fi
+tmp="$STATE/panel-update.status.tmp"
+printf '{"status":"%s","exit_code":%s,"finished_at":"%s"}\n' "$status" "$rc" "$(date -u +%FT%TZ)" > "$tmp"
+chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
+chown root:atdbackup "$STATE/panel-update.log"; chmod 0640 "$STATE/panel-update.log"
+exit "$rc"
+ATD_WORKER
+  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
+  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
+  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update <<'ATD_LAUNCHER'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+[[ "$#" -eq 0 ]] || { echo 'Arguments are not accepted.' >&2; exit 2; }
+STATE=/var/lib/atd-mikrotik-backup-studio
+if systemctl is-active --quiet atd-mikrotik-backup-panel-update.service; then echo 'An update is already running.' >&2; exit 9; fi
+tmp="$STATE/panel-update.status.tmp"
+printf '{"status":"running","started_at":"%s"}\n' "$(date -u +%FT%TZ)" > "$tmp"
+chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
+if ! /usr/bin/systemd-run --unit=atd-mikrotik-backup-panel-update --collect --no-block /usr/local/sbin/atd-mikrotik-backup-panel-update-worker; then
+  tmp="$STATE/panel-update.status.tmp"
+  printf '{"status":"failed","exit_code":1,"message":"Could not start updater."}\n' > "$tmp"
+  chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
+  exit 1
+fi
+ATD_LAUNCHER
+  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update
+  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update
+  SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-update.XXXXXX)
+  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-panel-update' > "$SUDOERS_TMP"
+  chmod 0440 "$SUDOERS_TMP"
+  if visudo -cf "$SUDOERS_TMP" >/dev/null; then
+    install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/atd-mikrotik-backup-panel-update
+    rm -f "$SUDOERS_TMP"
+  else
+    rm -f "$SUDOERS_TMP"
+    echo 'Warning: panel updater sudo rule failed validation; terminal updates remain available.' >&2
+  fi
+fi
+
 # On an existing installation, run the validated updater now so legacy worker code is removed too.
 if [[ "$EXISTING_INSTALL" == "1" ]]; then
   /usr/local/sbin/atd-mikrotik-backup-update
