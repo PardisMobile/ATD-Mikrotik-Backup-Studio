@@ -92,29 +92,13 @@ done
 for f in send-backup.php panel.css panel.js; do
   [[ -f "$APP/$f" ]] && cp -p "$APP/$f" "$BACKUP/$f"
 done
-rollback(){
-  echo 'Update failed; restoring previous ATD application files.' >&2
-  # Leave existing unit files and their enabled/active state untouched.
-  for f in send-backup.php panel.css panel.js; do
-    if [[ -f "$BACKUP/$f" ]]; then cp -p "$BACKUP/$f" "$APP/$f"
-    else rm -f -- "$APP/$f"; fi
-  done
-  if [[ -f "$BACKUP/cron-helper.sh" ]]; then cp -p "$BACKUP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
-  else rm -f /usr/local/sbin/atd-mikrotik-backup-cron; fi
-  if [[ -f "$BACKUP/cron-apply" ]]; then cp -p "$BACKUP/cron-apply" /etc/cron.d/atd-mikrotik-backup-apply
-  else rm -f /etc/cron.d/atd-mikrotik-backup-apply; fi
-  chown root:atdbackup "$APP/send-backup.php" "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
-  chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
-  chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
-  systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true
-}
 # Preserve existing helper and apply-worker Cron file so rollback can restore them.
 [[ ! -e /usr/local/sbin/atd-mikrotik-backup-cron ]] || cp -p /usr/local/sbin/atd-mikrotik-backup-cron "$BACKUP/cron-helper.sh"
 [[ ! -e /etc/cron.d/atd-mikrotik-backup-apply ]] || cp -p /etc/cron.d/atd-mikrotik-backup-apply "$BACKUP/cron-apply"
 
 # Snapshot every ATD-owned file this script can replace, excluding private config
 # and user data. A MISSING marker lets rollback remove only newly created files.
-for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer /etc/systemd/system/atd-mikrotik-backup-worker.service /etc/systemd/system/atd-mikrotik-backup-worker.timer /etc/systemd/system/atd-mikrotik-backup-scanner.service /etc/systemd/system/atd-mikrotik-backup-scanner.timer; do
+for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" "$STATE/telegram-scan-started-at" /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer /etc/systemd/system/atd-mikrotik-backup-worker.service /etc/systemd/system/atd-mikrotik-backup-worker.timer /etc/systemd/system/atd-mikrotik-backup-scanner.service /etc/systemd/system/atd-mikrotik-backup-scanner.timer; do
   if [[ -e "$path" ]]; then
     printf '%s\n' "$path" >> "$BACKUP/snapshots.list"
     cp -a --parents "$path" "$BACKUP/"
