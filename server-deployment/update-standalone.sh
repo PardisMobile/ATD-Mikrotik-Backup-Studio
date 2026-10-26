@@ -157,6 +157,25 @@ rollback(){
 }
 trap 'if (( UPDATE_TRANSACTION )); then rollback; fi' ERR
 
+# Install the time-zone helper and its restricted sudo policy at the start of the
+# transaction. The panel must not temporarily lose this control while an update
+# is in progress; the transaction snapshot/rollback already covers both paths.
+install -o root -g root -m 0750 "$TMP/set-system-timezone.sh" /usr/local/sbin/atd-mikrotik-backup-set-timezone
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
+  TIMEZONE_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-timezone.XXXXXX)
+  printf '%s\\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
+  chmod 0440 "$TIMEZONE_SUDOERS_TMP"
+  if visudo -cf "$TIMEZONE_SUDOERS_TMP" >/dev/null; then
+    install -o root -g root -m 0440 "$TIMEZONE_SUDOERS_TMP" /etc/sudoers.d/atd-panel-timezone
+    rm -f "$TIMEZONE_SUDOERS_TMP"
+  else
+    rm -f "$TIMEZONE_SUDOERS_TMP"
+    echo 'Warning: system time-zone control is disabled because its sudo rule failed validation.' >&2
+  fi
+else
+  echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
+fi
+
 # Stop ATD's web services while replacing app files. Then migrate old scanner
 # units only after all downloaded assets have passed validation and are backed up.
 if (( PHP_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-php.service; fi
@@ -277,23 +296,6 @@ ATD_LAUNCHER
   fi
 else
   echo 'Warning: sudo, visudo, or systemd-run is unavailable; panel-triggered updates are disabled.' >&2
-fi
-
-# Install the time-zone helper only after the existing application and Cron update succeeded.
-install -o root -g root -m 0750 "$TMP/set-system-timezone.sh" /usr/local/sbin/atd-mikrotik-backup-set-timezone
-if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
-  TIMEZONE_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-timezone.XXXXXX)
-  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
-  chmod 0440 "$TIMEZONE_SUDOERS_TMP"
-  if visudo -cf "$TIMEZONE_SUDOERS_TMP" >/dev/null; then
-    install -o root -g root -m 0440 "$TIMEZONE_SUDOERS_TMP" /etc/sudoers.d/atd-panel-timezone
-    rm -f "$TIMEZONE_SUDOERS_TMP"
-  else
-    rm -f "$TIMEZONE_SUDOERS_TMP"
-    echo 'Warning: system time-zone control is disabled because its sudo rule failed validation.' >&2
-  fi
-else
-  echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
 fi
 
 # Updater self-refresh is mandatory for a successful transaction; otherwise the
