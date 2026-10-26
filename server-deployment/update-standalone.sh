@@ -180,7 +180,9 @@ if (( TLS_WAS_ACTIVE )); then
   systemctl is-active --quiet atd-mikrotik-backup-tls.service
 fi
 # Ensure cron is available without editing any existing crontabs.
-if ! systemctl is-active --quiet cron.service 2>/dev/null && ! systemctl is-active --quiet crond.service 2>/dev/null; then
+# Install cron only when its service unit is absent. An installed but inactive
+# daemon is recovered below rather than reinstalling packages over host state.
+if ! systemctl cat cron.service >/dev/null 2>&1 && ! systemctl cat crond.service >/dev/null 2>&1; then
   if command -v apt-get >/dev/null 2>&1; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -y
@@ -209,7 +211,7 @@ fi
 
 
 # Install a narrowly-scoped, root-owned launcher for panel-triggered updates.
-if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1 && { [[ ! -x /usr/local/sbin/atd-mikrotik-backup-panel-update-worker ]] || [[ ! -x /usr/local/sbin/atd-mikrotik-backup-panel-update ]]; }; then
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1; then
   cat > /usr/local/sbin/atd-mikrotik-backup-panel-update-worker <<'ATD_WORKER'
 #!/usr/bin/env bash
 set +e
