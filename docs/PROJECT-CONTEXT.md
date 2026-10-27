@@ -224,3 +224,11 @@ Do not expand this task into unrelated generator redesign, prompt/color polishin
 - This prevents a successful status from being emitted if the marker/helper/policy that the panel itself checks are absent or invalid. The transaction's existing rollback trap remains active on failure.
 - Commit: `ba1ed72b3b8513545fa1247fc2ef5371bcaa11a5`.
 - Static syntax and full live Ubuntu rerun are still outstanding in this session. Do not claim the user's server is fixed until the updater is run and its output plus the read-only path checks confirm the marker, helper, and sudoers file.
+
+
+### Updater bootstrap diagnosis/fix — 2026-10-27
+- Followed the terminal command's bootstrap path in `server-deployment/update-standalone.sh`: it fetched the latest script but used `cmp` against `${BASH_SOURCE[0]}` to decide whether to replace/re-exec. That comparison depends on the invocation path and can leave an older updater process in control when the installed command is invoked through a wrapper/symlink/different path.
+- Changed bootstrap to always install the freshly downloaded updater and exec it once with `ATD_UPDATER_BOOTSTRAPPED=1`; it now prints the resolved GitHub commit so the actual updater generation is visible in terminal output.
+- Combined with the earlier postcondition gates, the current updater cannot print its success summary unless the installed source marker, timezone helper, and valid sudoers policy are present.
+- Commit: `ce874a701cd54c6c1df301a1e375de36702baa83`.
+- This is a source-level diagnosis and fix; live server confirmation and a shell syntax/CI run remain pending. User should only retry once after this commit has propagated; the output should show the bootstrap commit line. If that line is absent, the server is still invoking a stale command/bootstrap.
