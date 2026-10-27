@@ -190,3 +190,14 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - The Windows generator already collects the default timezone from the user and places it in the PHP configuration. Do not treat this as an unresolved design question or ask the user to repeat it.
 - The user has repeatedly asked for a thorough inspection of the updater before edits, and actual code work—not recurring status-only reports or repeated explanations that the timezone helper is installed late in the updater. Investigate the real execution and rollback paths, identify a reproducible fault, and implement/test a substantive correction.
 - Be precise about work: source review is not a fix; do not report completed implementation or live-server validation unless actually performed. The current task is to continue from the actual repo state and deliver code changes after full impact review.
+
+
+### Explicit scope correction — 2026-10-27 (authoritative)
+The active work scope is limited to these three defects:
+1. Fix the panel/Linux timezone behavior.
+2. Fix the panel updater.
+3. Fix the terminal installation/update command that was not downloading or installing all required files.
+
+The Windows generator's timezone selection was an intentionally added feature. The user confirms that timezone selection was added to the generator; do not treat it as an accidental regression or remove it as part of this scope. Preserve that feature and its existing choices/configuration behavior.
+
+Do not expand this task into unrelated generator redesign, prompt/color polishing, RouterOS timezone changes, Telegram/RADIUS changes, or other feature work. Preserve existing working behavior. Any changes beyond the three listed defects require a clear technical necessity and should be explained before implementation. Source/CI checks must be distinguished from live server validation.
