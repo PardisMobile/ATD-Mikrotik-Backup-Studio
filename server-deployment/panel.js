@@ -170,7 +170,7 @@
     if(form.querySelector('[name="logout"]')||form.classList.contains('login-form'))return;
     if(!form.querySelector('[name="csrf"]'))return;
     const action=form.querySelector('[name="action"]')?.value;
-    if(action==='timezone'||action==='update_start')return;
+    if(action==='timezone')return;
     event.preventDefault();submitAjax(form);
   });
   let searchTimer=null;
