@@ -1,59 +1,42 @@
-# Test report and current verification status
+# Test report and verification status
 
-Last reviewed: 2026-10-26.
+Reviewed: 2026-10-28. This report separates repository/source checks from live-host checks. Update it after any release or server deployment.
 
-## Repository-level implementation review
-- The Windows generator creates a customer-specific `install.sh` in Telegram/Panel mode. It embeds only the first-run private config payload; panel assets are downloaded from GitHub at install time.
-- The generated installer resolves one immutable `main` commit SHA and downloads all server assets from that exact commit, avoiding mixed snapshots from separate mutable `main` requests. Independent SHA-256 manifest/signature verification is not yet implemented.
-- Newly generated RouterOS scripts use the original SFTP-only flow and never call the panel or Telegram. The generator persists the chosen backup times in the private config. The Cron helper schedules server-side scans after those times, with a configurable delay and a six-minute retry window. The single Telegram connection test sends the newest existing backup file using sendDocument; per-file send buttons and text-only test messages are not used. Installer/updater cleanup removes legacy worker/scanner units and timers.
-- The runtime installer reads the selected public port from the generated configuration, checks for conflicts on a clean install, preserves the installed port on re-runs, and aborts if a new package expects a different port.
-- PHP sessions use an ATD-owned writable directory, and panel session cookies are explicitly marked Secure because TLS terminates at the local socat proxy.
-- The original RouterOS identity-based backup filename behavior is preserved; the scanner skips unsupported filenames rather than modifying the SFTP core.
-- Private configuration lives at `/etc/atd-mikrotik-backup-studio/config.php`; delivery state and session data live under `/var/lib/atd-mikrotik-backup-studio`.
-- A dedicated updater is available as `sudo atd-mikrotik-backup-update`; it stages and syntax-checks app code, backs up prior app files, and targets only the ATD PHP service.
+## Architecture reviewed
 
-## Automated checks
-- GitHub Actions run Bash syntax checks, ShellCheck, PHP syntax checks, source/template consistency tests, bootstrap syntax checks, key URL/port/session invariants, and PowerShell parser validation.
-- The latest CI status must be checked against the final commit before release. The source workflow now asserts immutable-commit snapshot behavior and updater staging order.
-- Static validation does not establish that a real server install or update succeeds end to end.
+- Windows PowerShell generator: collects user settings, writes a RouterOS SFTP backup/scheduler script and a private-config `install.sh`; Linux server assets are fetched from one immutable Git commit.
+- Linux runtime: PHP panel code under `/opt/atd-mikrotik-backup-studio`; private configuration under `/etc/atd-mikrotik-backup-studio`; delivery state and sessions under `/var/lib/atd-mikrotik-backup-studio`; root-owned project helpers under `/usr/local/sbin`; project schedules under `/etc/cron.d`.
+- Panel actions: PHP authenticates and handles CSRF-protected POSTs. `panel.js` sends same-origin `fetch` requests. The Telegram Test AJAX contract is JSON `{ok,message}` without page reload; the test sends the newest `.backup` file through Telegram `sendDocument`.
+- Delivery: Linux Cron invokes the PHP scanner. The server checks file size stability, tracks sent-file SHA-256 state, and retains the existing delivery/deduplication behavior.
+- Timezone: panel state/config selects the Linux display and Cron `CRON_TZ`; the root-owned helper validates the IANA zone and calls `timedatectl`. A real timezone application changes host timezone and was not part of the read-only audit.
+- Updater: pins the updater and assets to one resolved commit, stages/syntax-checks before activation, snapshots ATD-owned files and relevant service states, applies within a lock/rollback boundary, and writes the installed-source marker only after required checks.
 
-## Not yet verified on a real server
-- A clean Linux VM install using the exact generated `install.sh` and private configuration.
-- Re-running the installer and verifying every config value, assigned port, state entry, and backup file remains unchanged.
-- Updating PHP/CSS/JS from GitHub and validating rollback after a deliberately invalid staged file.
-- A real MikroTik RouterOS 7 scheduled backup and SFTP transfer.
-- Actual Telegram bot file delivery, duplicate-send behavior, schedule-triggered Linux Cron retries, schedule-setting changes from the panel, and panel password-change flow.
-- Certificate trust behavior for RouterOS and browser access on a public server with the intended domain/certificate.
-- Compatibility with all Linux distributions and existing host firewall/provider policies.
+## Repository/source checks
+
+- The local checkout was `main` at `2a0d2f458020174c9605df210c78c76c0667d006` during review.
+- `node --check server-deployment/panel.js`: passed using the bundled Node runtime.
+- `bash -n` for installer, updater, Cron helper, and timezone helper: passed.
+- `git diff --check`: run after the documentation edits.
+- Local PHP CLI, ShellCheck, PowerShell, and `tinycss2` were unavailable in this Mac runtime. Those checks are not claimed as local passes. The latest GitHub Actions result must be checked on the pushed commit.
+- A syntax check or source review does not prove browser behavior, server update rollback, RouterOS SFTP, or Telegram delivery.
+
+## Live-host checks before update
+
+Read-only SSH to `vip4.nahagebad.net` succeeded. On 2026-10-28 the host reported Ubuntu 22.04, 2.4 GB free on `/`, and `/opt/atd-mikrotik-backup-studio` as the PHP document root. PHP backend `127.0.0.1:6669` and ATD TLS endpoint `:24443` both returned HTTP 200. ATD PHP/TLS and generic Cron services were active; Cron was enabled.
+
+The installation has no local Git checkout. Its recorded source commit was `61b3858b9c4b3a03e02bc48465e9220af50df0d7`. The PHP, JS, and CSS app assets matched that source; `main` had advanced to `2a0d2f458020174c9605df210c78c76c0667d006`. The panel JS, PHP AJAX response condition, and terminal updater were therefore behind `main`. The deployed Cron and timezone helpers matched current `main`.
+
+The observed Linux zone was `Etc/UTC`; Cron used `CRON_TZ=UTC`. No configured or saved panel zone override was present, so the code's `UTC` default agrees with both. No timezone change was made.
+
+## Tests requiring a later controlled run
+
+- GitHub Actions for the final pushed commit, including PHP lint, JS/CSS checks, generated-bootstrap invariants, ShellCheck, and Windows PowerShell parser.
+- Real terminal updater run and post-update SHA/commit-marker/HTTP checks. Do not test rollback by injecting failure on production; use a disposable host.
+- Authenticated browser testing of panel navigation, AJAX, timezone form, update status, and search/pagination.
+- Applying a different timezone would change host-wide timezone and Cron behavior; only do so with an explicit operational requirement and suitable window.
+- Telegram Test delivers the newest backup file to the configured chat. It has not been run; do not run without explicit user approval for the real delivery.
+- RouterOS backup upload/SFTP and full end-to-end delivery were not tested in this review.
 
 ## Release gate
-Do not describe the project as production-ready until the latest CI checks pass and the full install/update/SFTP/Telegram flow has been exercised on a disposable Linux server. Record the exact commit and the actual test environment in any final release report.
 
-## Review of main after password-policy synchronization (2026-10-25)
-
-- Reviewed the Windows generator and canonical PHP panel on `main`: the generator enforces a minimum of 8 characters, retries after too-short input or confirmation mismatch, and the embedded PHP UI/validation uses the same 8-character policy.
-- Reviewed the latest main workflow definition: it covers PHP lint for both canonical and embedded PHP, JavaScript/CSS parsing, canonical asset parity, generated bootstrap Bash syntax, key behavior invariants, installer/updater Bash checks, ShellCheck, and Windows PowerShell parsing.
-- The GitHub connector returned no combined status checks and no PR-triggered workflow runs for the latest direct-to-main commit. This is **unknown/not verified**, not a passing CI result. Check the Actions page for the push-triggered workflow run before release.
-- Project handoff context was added to the README under “Project Context for Continued Development” so future sessions can recover the current branch policy, implementation architecture, and verification limits.
-- Branch comparison still reports `fix/telegram-schedule-and-connection-test` as 25 commits ahead and 9 behind current `main`, with the common base at `15022946ec458758eff516968ee1cfcce7f673e3`. Tree-level file comparison shows the main implementation already contains the reviewed Cron/Telegram/install/update/workflow behavior plus the newer password policy and generator guidance. Do not delete the extra branch until its unique commits are individually reconciled and cleanup is possible.
-
-
-## Follow-up review (2026-10-25)
-
-- Fixed the generated bootstrap to resolve one GitHub commit SHA before downloading assets and pass that same SHA to the runtime installer.
-- Fixed runtime installer updater download to use the same pinned commit when invoked from the generated bootstrap; manual invocation resolves a commit before downloading the updater.
-- Fixed updater asset downloads to use a single immutable commit and deferred legacy service cleanup until downloaded assets pass validation.
-- Fixed a re-install mismatch: the runtime installer now derives `BACKUP_DIR` from the preserved private config, not the newly generated package. This prevents the service sandbox/ACLs from pointing at a different directory than the app actually uses.
-- Updated CI invariants and GitHub update documentation to reflect this architecture.
-- Still required: inspect the push-triggered workflow result for the newest commit, execute the generated PowerShell on Windows, and run clean-install/reinstall/update/rollback tests on a disposable Linux VM. No real-server end-to-end test has been performed in this review.
-
-
-## Panel enhancement batch (2026-10-26)
-
-- Added section navigation for Dashboard, Backups, Telegram, and Settings while retaining server-rendered sections and existing POST/CSRF handling.
-- Added a live clock in the top bar; the existing clock display remains available in Settings.
-- Time-zone settings use a narrowly scoped root-owned helper to call timedatectl set-timezone, validate the installed IANA zone, and preserve the existing Linux Cron schedule setting. The actual system clock is not set manually and NTP is not changed.
-- Updated accent-aware UI styling and README guidance. The footer already displayed “Code by Amir Taheri” with the approved WhatsApp link before this batch.
-- Static checks must pass on the resulting commit. A live Ubuntu server, RouterOS router, and real Telegram/SFTP end-to-end test have not been run from this change session.
-
-- Added server-side backup sorting by name, size, and modification time; search and pagination preserve the selected sort. Static CI verifies syntax and embedded-asset parity; this feature has not been exercised against a live backup directory in this session.
+Do not call the complete production flow verified until the final commit's CI passes and the server update, authenticated panel interactions, timezone path, RouterOS SFTP upload, and authorized Telegram delivery have been exercised with their real results recorded here. A successful updater run alone is not proof of Telegram delivery or rollback under injected failure.

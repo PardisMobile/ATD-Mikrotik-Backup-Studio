@@ -19,7 +19,7 @@ These rules are the project's source of truth. Future implementation, refactorin
 ### 3. One-command server bootstrap from the generated output
 - The EXE must produce a server-specific output/package that carries the initial configuration needed to bootstrap that installation, as well as the RouterOS-side output.
 - The user transfers the server bootstrap output to the Linux server, copies/pastes the single provided command, and presses Enter.
-- That command must automatically configure the server using the initial values collected by the EXE: create required directories/files, install only missing prerequisites, configure the ATD panel, the server-side Telegram scanner timer, and fetch shared/versioned application components from GitHub when needed.
+- That command must automatically configure the server using the initial values collected by the EXE: create required directories/files, install only missing prerequisites, configure the ATD panel, the server-side Telegram scanner Cron entries, and fetch shared/versioned application components from GitHub when needed.
 - The user must not be asked to manually transfer or construct individual PHP, CSS, JavaScript, or other internal panel files.
 - The install command and its prerequisites must be clearly identified in the generated output and in the README. Keep the workflow simple for non-technical users.
 
@@ -54,9 +54,9 @@ Any proposed implementation that contradicts these rules is incorrect, even if i
 
 ---
 
-## Current optimization request and handoff notes — 2026-10-26
+## Historical optimization request and handoff notes — 2026-10-26
 
-This section records the user's current requirements and the latest attempted changes. It is a handoff checklist, not a statement that all features are complete or production-tested.
+This section preserves requirements and review notes from the 2026-10-26 handoff. The verified status below and later dated entries supersede stale statements in this historical checklist.
 
 ### User's priorities / hard constraints
 - The currently deployed backup/SFTP/Telegram flow is working. Treat this as optimization, not a rewrite.
@@ -64,7 +64,7 @@ This section records the user's current requirements and the latest attempted ch
 - Before modifying commands for RouterOS or Ubuntu/Linux, verify them against the relevant official MikroTik RouterOS and Ubuntu/Linux documentation. Do not assume a command or time-zone name is supported by every RouterOS version.
 - Inspect the actual current `main` source and CI before proposing or editing. Never claim real-server tests were performed unless they were.
 - Prefer a simple, reversible implementation. Avoid adding a complicated updater or risking HTTP 500 errors.
-- The user wants to review the actual current state in a new chat before deciding what to do next. **Do not immediately continue making code changes in that new chat. First audit the changed files, explain what is sound/unsafe/incomplete, and recommend a safe next step.**
+- The user requested an audit before implementation in that earlier handoff. That sequencing instruction has since been superseded by the current request to complete the audit, fixes, and deployment.
 
 ### Windows generator requirements
 - Review and improve question wording, order, colors, contrast, validation, and brief help text so non-technical users understand each prompt.
@@ -75,15 +75,15 @@ This section records the user's current requirements and the latest attempted ch
   4. USA — `America/New_York`
   5. Manual — user enters an IANA time-zone name, e.g. `Asia/Dubai` or `America/Los_Angeles`
 - Label option 4 simply “USA”; do not add “Washington DC”.
-- The Windows generator's selected zone is stored for the RouterOS script and Linux-side Cron schedule; installation must not silently change the host-wide system time zone. In panel Settings, the administrator may explicitly apply a zone to the Linux host and Cron using the restricted root-owned `timedatectl set-timezone` helper. This changes timezone presentation, not the system clock or NTP state. RouterOS uses its own clock/time-zone setting, so if the zone is changed after installation, show a clear warning to align RouterOS `time-zone-name` as well.
+- The Windows generator stores the selected zone in the private server configuration for panel/Cron defaults. Installation does not silently change the host-wide time zone. In panel Settings, an administrator can explicitly apply a zone to Linux and Cron with the restricted root-owned `timedatectl set-timezone` helper; this does not set the system clock or alter NTP. RouterOS scheduling remains independent and is outside the panel timezone change.
 - Keep existing backup frequency, custom times, SFTP settings, public port, panel password, and local-file-retention prompts/behavior intact.
 - The Windows generator's responsibility is to collect customer-specific values and produce the RouterOS output plus `install.sh` containing only the private installation configuration. Do not embed duplicate PHP/CSS/JS/Cron application assets in the PowerShell generator. The generated `install.sh` must fetch the versioned server assets from GitHub using one immutable commit snapshot; the server installer/updater owns installing and updating those assets.
 
 ### Panel/UI requirements
 - Display the Linux server's current date/time and detected system time zone.
-- Show a clearly red warning explaining that RouterOS Scheduler and Linux Cron may use different time zones.
+- Clearly explain that Linux Cron does not change the RouterOS scheduler; configured schedule times must be aligned by the administrator.
 - Provide the five-option time-zone selector directly below the warning, including Manual with an example.
-- A selected time zone must actually affect the intended Linux-side scheduling behavior. Merely saving a value or writing `CRON_TZ` is not proof that the router and Linux schedules are aligned. Determine the intended model (global vs per-router) and correctly convert or map schedules; account for multiple routers if supported.
+- A selected time zone affects Linux host presentation and the ATD Cron schedule through `CRON_TZ`. The current project configuration is one global schedule, not per-router timezone conversion.
 - Improve lightweight CSS animation and visual consistency.
 - Avoid full-page refresh for normal panel actions where safely feasible; preserve POST/CSRF/redirect/session behavior and ensure failures are visible. Do not use a fragile generic AJAX replacement that silently breaks forms or navigation.
 - Show at most 20 backup files per page; retain accurate total counts/status and implement server-side search and pagination. Sorting was requested for review but must not be claimed as implemented unless it exists and works.
@@ -172,13 +172,10 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - This is source inspection, not a live browser or Telegram-delivery test. Record test results honestly.
 
 
-### Updater safety audit — 2026-10-27 (source review; remediation pending)
-- Current `server-deployment/update-standalone.sh` is not yet safe to treat as fully transactional. It disables/removes legacy Telegram-related units before backing up their prior state, and the rollback path itself repeats removal rather than restoring the previous unit files and enabled/active states. Do not run this updater against a production installation until this is corrected.
-- Its backup/rollback scope is incomplete: app assets and the Cron helper/apply file are partly covered, but updater/time-zone helpers, sudoers files, installed-source marker, and service/Cron states are not captured as one transaction.
-- Several consequential operations occur after the PHP health check and its rollback boundary (Cron service installation/enabling and applying the Cron schedule, panel updater helper/sudoers creation, and timezone helper/sudoers installation). A failure there can leave a partially updated host while the script has no complete rollback.
-- The installed-source commit marker and final success messaging need to be committed only after all required actions and post-update health checks succeed. The self-update path must also report download/install failure rather than silently leave a stale updater.
-- Preserve the existing AJAX Telegram Test contract and the known-good Telegram behavior documented above. This audit does not change Telegram behavior and does not represent a live server test.
-- Next implementation must stage and validate all artifacts first, capture owned files plus previous service/cron/sudoers states, apply updates within one rollback boundary, restore the exact previous state on failure, and avoid removing legacy units unless their ownership and migration are explicitly verified. Add syntax/CI tests and document that live Ubuntu/Telegram checks remain outstanding until performed.
+### Updater safety audit — 2026-10-27 (historical; follow-up below)
+- The initial review found incomplete transaction snapshots, weak failure rollback, and legacy-unit cleanup before adequate state capture. Those findings describe the earlier updater revision only; subsequent commits updated staging, snapshot, rollback, and success-marker handling.
+- Preserve the AJAX Telegram Test contract and known-good send behavior documented above. The updater changes do not alter Telegram file selection, sending, stability checks, deduplication, or retries.
+- Source-level rollback coverage is not equivalent to a failure-injection test on a disposable Ubuntu host. Do not claim rollback has been exercised unless that test is actually run.
 
 
 ### Updater and generated-asset remediation — 2026-10-27
@@ -190,6 +187,16 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - Corrected the generated PowerShell bootstrap's embedded PHP and JavaScript templates to match canonical server assets. This restores the AJAX Telegram Test contract (panel.js / send-backup.php): no page reload, JSON response handling. Telegram send behavior and RouterOS/SFTP code were not changed.
 - CI at the last verification point: Installer checks succeeded; PowerShell parse and shell syntax checks succeeded. Source checks were still running. The GitHub source-check workflow had earlier exposed the generated PHP/JS mismatch; the canonical templates were synchronized afterward.
 - These are repository/CI validations, not a live Ubuntu installation or Telegram send test. Do not claim production update/rollback behavior or live Telegram delivery has been verified until tested on the user's server.
+
+
+### Verified architecture and deployment state — 2026-10-28
+- The Windows PowerShell generator collects setup values, creates the RouterOS SFTP backup script/scheduler output, and in panel mode emits a private-config bootstrap. The bootstrap resolves one immutable `main` SHA and fetches versioned Linux assets from that snapshot. RouterOS does not call Telegram or the PHP panel.
+- Linux app code is served by PHP's built-in server from `/opt/atd-mikrotik-backup-studio` on a loopback port. A project-owned `socat` TLS endpoint forwards the ATD public port to that backend. Private config is under `/etc/atd-mikrotik-backup-studio`; runtime state/session files are under `/var/lib/atd-mikrotik-backup-studio`; project helpers are under `/usr/local/sbin`; schedules are in ATD-owned `/etc/cron.d` files.
+- `send-backup.php` renders the authenticated panel and handles POST actions. `panel.js` uses same-origin `fetch`, CSRF form data, and `X-Requested-With: XMLHttpRequest`; Telegram Test expects JSON `{ok,message}` and does not reload. The Test action sends the newest `.backup` file with Telegram `sendDocument`; it is not a non-delivery connectivity probe.
+- Automatic Telegram delivery remains server-side: the Cron scanner finds eligible, stable backup files, uses the existing SHA-256 delivery state to deduplicate, and preserves the known-good send behavior at `13cf0dd5fefcede571b7d6af66b1c9c2910093fc`.
+- The updater resolves and pins one immutable commit, stages and validates PHP/Cron/timezone assets, snapshots ATD-owned files/state, serializes updates with a lock, and has a rollback trap. It can restart only the ATD PHP/TLS units and updates the project's own Cron/helper/sudo policy paths. This source review does not establish that rollback has been failure-tested or Telegram delivery succeeded.
+- On 2026-10-28, the production app was observed at recorded source commit `61b3858b9c4b3a03e02bc48465e9220af50df0d7`; GitHub `main` was `2a0d2f458020174c9605df210c78c76c0667d006`. The installed app matched its recorded commit; `panel.js`, `send-backup.php`, and the standalone updater were behind `main`. The installed timezone and Cron helper code matched current `main`.
+- Live checks on that date confirmed Ubuntu 22.04, PHP backend and TLS endpoint returning HTTP 200, and Linux/Cron zones both UTC (`Etc/UTC`/`UTC`). No live Telegram Test was run because it sends the newest backup file. These observations are point-in-time; update them after deployment and retesting.
 
 
 ### User clarification — panel/Linux timezone and scope (2026-10-27)
