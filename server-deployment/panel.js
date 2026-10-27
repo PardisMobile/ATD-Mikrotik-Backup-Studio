@@ -68,10 +68,13 @@
       const response=await fetch(form.action||location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
       if(!response.ok)throw new Error('Request failed ('+response.status+')');
       const action=form.querySelector('[name="action"]')?.value;
-      if(action==='telegram_test'||action==='update_start'){
-        const data=await response.json();
-        showMessage(data.message||(action==='telegram_test'?'Telegram test finished.':'Update request finished.'),!!data.ok);
+      if(action==='telegram_test'||action==='update_start'||action==='timezone'){
+        const body=await response.text();
+        let data;
+        try{data=JSON.parse(body)}catch(e){throw new Error(body.trim().slice(0,500)||'The server returned an invalid response.')}
+        showMessage(data.message||(action==='telegram_test'?'Telegram test finished.':action==='timezone'?'Time zone request finished.':'Update request finished.'),!!data.ok);
         if(action==='update_start'&&data.ok)pollUpdateStatus();
+        if(action==='timezone'&&data.ok){setTimeout(()=>location.reload(),700);}
         return;
       }
       const html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html');
@@ -172,7 +175,6 @@
     if(form.querySelector('[name="logout"]')||form.classList.contains('login-form'))return;
     if(!form.querySelector('[name="csrf"]'))return;
     const action=form.querySelector('[name="action"]')?.value;
-    if(action==='timezone')return;
     event.preventDefault();submitAjax(form);
   });
   let searchTimer=null;
