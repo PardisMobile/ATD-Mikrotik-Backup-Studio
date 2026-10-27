@@ -16,7 +16,6 @@ jobs:
       - name: Check canonical PHP syntax
         run: |
           php -l server-deployment/send-backup.php
-          php -l server-deployment/install-standalone.sh
       - name: Check JavaScript and CSS syntax
         run: |
           node --check server-deployment/panel.js
