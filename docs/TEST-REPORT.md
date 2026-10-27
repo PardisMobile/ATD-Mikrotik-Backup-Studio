@@ -10,7 +10,7 @@ Reviewed: 2026-10-28. This report separates repository/source checks from live-h
 - Delivery: Linux Cron invokes the PHP scanner. The server checks file size stability, tracks sent-file SHA-256 state, and retains the existing delivery/deduplication behavior.
 - Timezone: panel state/config selects the Linux display and Cron `CRON_TZ`; the root-owned helper validates the IANA zone and calls `timedatectl`. A real timezone application changes host timezone and was not part of the read-only audit.
 - Updater: pins the updater and assets to one resolved commit, stages/syntax-checks before activation, snapshots ATD-owned files and relevant service states, applies within a lock/rollback boundary, and writes the installed-source marker only after required checks.
-- A post-deployment rollback audit found that an earlier updater snapshot listed `/etc/sudoers.d/atd-panel-update`, while the installer/updater actually writes `/etc/sudoers.d/atd-mikrotik-backup-panel-update`. The source is corrected to snapshot the exact file and the workflow now asserts that the installer and rollback paths agree. The next successful server update must confirm the exact path appears in `snapshots.list`; rollback failure injection remains reserved for a disposable host.
+- A post-deployment rollback audit found that an earlier updater snapshot listed `/etc/sudoers.d/atd-panel-update`, while the installer/updater actually writes `/etc/sudoers.d/atd-mikrotik-backup-panel-update`. The source now snapshots the exact file, CI asserts that the installer and rollback paths agree, and the corrected live snapshot was verified. Rollback failure injection remains reserved for a disposable host.
 
 ## Repository/source checks
 
@@ -20,6 +20,7 @@ Reviewed: 2026-10-28. This report separates repository/source checks from live-h
 - `git diff --check`: passed for the documentation changes.
 - The two GitHub Actions runs associated with `dbbf64f` completed successfully.
 - Both GitHub Actions workflows for report-only commit `8482b74` also completed successfully.
+- Both GitHub Actions workflows for updater-fix commit `bd21406` completed successfully.
 - Local PHP CLI, ShellCheck, PowerShell, and `tinycss2` were unavailable in this Mac runtime. PHP syntax was instead checked with the installed server PHP CLI after deployment. Local CSS parsing, ShellCheck, and PowerShell parsing are not claimed as direct local passes.
 - A syntax check or source review does not prove browser behavior, server update rollback, RouterOS SFTP, or Telegram delivery.
 
@@ -29,7 +30,9 @@ Read-only SSH to `vip4.nahagebad.net` succeeded. On 2026-10-28 the host reported
 
 The installation has no local Git checkout. Before update its recorded source commit was `61b3858b9c4b3a03e02bc48465e9220af50df0d7`. The PHP, JS, and CSS app assets matched that source, but `panel.js`, the PHP AJAX response condition, and terminal updater were behind GitHub `main`. The deployed Cron and timezone helpers already matched `main`.
 
-The terminal updater completed successfully for `dbbf64ffa832fbe2c8725df82b062b834e9bdc36`, then was run again for report-only commit `8482b742c8c08aa46a789ef2f80a33f4cafbb45e`. The second run succeeded, matched the new source marker, and preserved the same application asset hashes, which exercises repeat-update behavior. It created root-only timestamped pre-update snapshots under `/var/lib/atd-mikrotik-backup-studio` (the first was `code-backup-20261027221944`; the second was `code-backup-20261027222326`). After the first run, PHP/JS/CSS/updater/Cron/timezone helper SHA-256 digests matched local source, PHP lint passed, and both backend/TLS endpoints returned HTTP 200. ATD PHP/TLS and generic Cron services remained active and enabled; no legacy ATD worker/scanner unit was present. No panel-triggered transient updater unit was started.
+The terminal updater completed successfully for `dbbf64ffa832fbe2c8725df82b062b834e9bdc36`, then was rerun for report-only commit `8482b742c8c08aa46a789ef2f80a33f4cafbb45e`. Both runs succeeded and preserved application assets, exercising repeat-update behavior. Root-only snapshots were stored under `/var/lib/atd-mikrotik-backup-studio` (first `code-backup-20261027221944`; second `code-backup-20261027222326`). After the first run, app/helper SHA-256 digests matched source, PHP lint passed, and both backend/TLS endpoints returned HTTP 200. ATD PHP/TLS and generic Cron remained active and enabled; no legacy ATD worker/scanner unit was present. No panel-triggered transient updater unit was started.
+
+A later audit found the updater's rollback snapshot used the wrong name for the existing panel updater sudoers file. Commit `bd21406f5efa35461afa2bb2068d93ebb32a865f` corrected it and added a CI invariant. The final deployment snapshot at `/var/lib/atd-mikrotik-backup-studio/code-backup-20261027223029/snapshots.list` contains `/etc/sudoers.d/atd-mikrotik-backup-panel-update`; its saved copy compared byte-for-byte with the pre-update file and retained root:root 0440. The updater completed, installed-source marker matched `bd21406`, PHP lint passed, both HTTP endpoints returned 200, and the prior config/state/four-backup manifest remained unchanged. No rollback failure was injected on production.
 
 Before/after digests for private config and delivery state were identical. The backup directory still contained four `.backup` files and its aggregate manifest was unchanged. The Cron timezone remained UTC and the system zone remained `Etc/UTC`. The updater invoked `systemctl enable --now cron.service`; Cron was already active/enabled before this operation and remained so afterward. No unrelated panel or service definition was intentionally modified.
 
@@ -37,7 +40,7 @@ The observed Linux zone was `Etc/UTC`; Cron used `CRON_TZ=UTC`. No configured or
 
 ## Tests requiring a later controlled run
 
-- GitHub Actions for this final report-only commit (the two workflows for `8482b74` passed; this edit will run the same workflows again).
+- GitHub Actions for this final report-only commit (the two workflows for `bd21406` passed; this edit will run the same workflows again).
 - Failure-injection rollback test on a disposable host. Do not test rollback by injecting failure on production.
 - Authenticated browser testing of panel navigation, successful timezone action, update status, and search/pagination.
 - Applying a different timezone would change host-wide timezone and Cron behavior; only do so with an explicit operational requirement and suitable window.
