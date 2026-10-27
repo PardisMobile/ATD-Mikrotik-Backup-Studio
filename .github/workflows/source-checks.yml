@@ -13,20 +13,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y php-cli
-      - name: Check PHP syntax
+      - name: Check canonical PHP syntax
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
-          marker = "$php = @'"
-          start = source.index(marker) + len(marker)
-          start = source.index("\n", start) + 1
-          end = source.index("\n'@", start)
-          php = source[start:end].lstrip()
-          Path("/tmp/atd-generated-panel-lint.php").write_text(php, encoding="utf-8")
-          PY
           php -l server-deployment/send-backup.php
-          php -l /tmp/atd-generated-panel-lint.php
+          php -l server-deployment/install-standalone.sh
       - name: Check JavaScript and CSS syntax
         run: |
           node --check server-deployment/panel.js
