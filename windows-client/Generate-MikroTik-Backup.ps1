@@ -330,8 +330,12 @@ TMP="$(mktemp -d /tmp/atd-bootstrap.XXXXXX)"
 chmod 0700 "$TMP"
 trap 'rm -rf -- "$TMP"' EXIT
 API='https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main'
+extract_commit_sha(){
+  grep -oE '"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' "$1" 2>/dev/null \
+    | head -n 1 | sed -E 's/.*"([0-9a-f]{40})"$/\1/' || true
+}
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$API" -o "$TMP/commit.json"
-COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$TMP/commit.json" | sed -n '1p')"
+COMMIT="$(extract_commit_sha "$TMP/commit.json")"
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve an immutable GitHub commit for this installation.' >&2; exit 5; }
 BASE="https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$COMMIT/server-deployment"
 fetch_asset() {

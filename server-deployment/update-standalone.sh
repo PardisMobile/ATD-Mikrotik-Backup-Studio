@@ -11,6 +11,10 @@ for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installat
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI is required; no packages were installed.' >&2; exit 4; }
+extract_commit_sha(){
+  grep -oE '"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' "$1" 2>/dev/null \
+    | head -n 1 | sed -E 's/.*"([0-9a-f]{40})"$/\1/' || true
+}
 
 # Bootstrap the latest updater before performing application migrations. Replacing
 # the script at the end is too late: the current process would still run old
@@ -21,7 +25,7 @@ if [[ "${ATD_UPDATER_BOOTSTRAPPED:-0}" != "1" ]]; then
   trap 'rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"' EXIT
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
     'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$BOOT_COMMIT_TMP"
-  BOOT_COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$BOOT_COMMIT_TMP" | sed -n '1p')"
+  BOOT_COMMIT="$(extract_commit_sha "$BOOT_COMMIT_TMP")"
   [[ "$BOOT_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve the latest updater source commit.' >&2; exit 5; }
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
     "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$BOOT_COMMIT/server-deployment/update-standalone.sh" -o "$BOOT_UPDATER_TMP"
@@ -48,7 +52,7 @@ if [[ ! "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
   COMMIT_TMP=$(mktemp)
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
     'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$COMMIT_TMP"
-  COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$COMMIT_TMP" | sed -n '1p')"
+  COMMIT="$(extract_commit_sha "$COMMIT_TMP")"
   rm -f -- "$COMMIT_TMP"
 fi
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable GitHub source commit; update aborted.' >&2; exit 5; }

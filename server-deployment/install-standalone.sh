@@ -3,6 +3,10 @@ set -Eeuo pipefail
 # Standalone ATD panel runtime. Run as root with the generated package directory as argument.
 [[ $(id -u) -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 2; }
 SRC=${1:-$(pwd)}
+extract_commit_sha(){
+  grep -oE '"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' "$1" 2>/dev/null \
+    | head -n 1 | sed -E 's/.*"([0-9a-f]{40})"$/\1/' || true
+}
 for f in send-backup.php panel.css panel.js config.php cron-helper.sh; do [[ -f "$SRC/$f" ]] || { echo "Missing generated asset $f in $SRC" >&2; exit 3; }; done
 # Define an explicit baseline for Ubuntu deployments instead of silently implying every release is supported.
 if [[ -r /etc/os-release ]]; then
@@ -225,7 +229,7 @@ if [[ ! "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
   trap 'rm -f -- "$COMMIT_TMP"' EXIT
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
     'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$COMMIT_TMP"
-  SOURCE_COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$COMMIT_TMP" | sed -n '1p')"
+  SOURCE_COMMIT="$(extract_commit_sha "$COMMIT_TMP")"
   rm -f -- "$COMMIT_TMP"
 fi
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable updater source commit.' >&2; exit 9; }

@@ -63,6 +63,8 @@ jobs:
               raise SystemExit("Bootstrap must pass the resolved commit to the runtime installer")
           if 'raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment' in installer:
               raise SystemExit("Bootstrap must not fetch individually mutable main-branch assets")
+          if '"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' not in installer:
+              raise SystemExit("Generated bootstrap must parse compact and pretty-printed GitHub commit JSON")
           generator = source
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           router_start = source.index("$routerScript = @\"")
@@ -108,6 +110,9 @@ jobs:
               raise SystemExit("Do not add a text-only test or per-file send buttons")
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
+          for path, script in (("installer", runtime), ("updater", updater)):
+              if '"sha"[[:space:]]*:[[:space:]]*"[0-9a-f]{40}"' not in script:
+                  raise SystemExit(f"{path} must parse compact and pretty-printed GitHub commit JSON")
           snapshot = next((line for line in updater.splitlines() if line.startswith("for path in /usr/local/sbin/atd-mikrotik-backup-cron ")), "")
           timezone_sudoers = "/etc/sudoers.d/atd-panel-timezone"
           if timezone_sudoers not in snapshot:
