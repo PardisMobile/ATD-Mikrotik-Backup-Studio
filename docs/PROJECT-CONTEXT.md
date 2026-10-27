@@ -120,6 +120,10 @@ The following changes were attempted directly on `main`; re-fetch them before ac
 ### Applied follow-up fix — 2026-10-27
 - `server-deployment/panel.js`: the in-panel `update_start` form now uses the existing AJAX submission path. This allows the UI to detect the `UPDATE_STARTED` flash response and begin polling `?ajax=update_status`; previously the submit handler deliberately let this form use a native navigation, so the status poll never started. Time-zone submission remains native as intended.
 
+
+### Applied follow-up — Telegram test diagnostics (2026-10-27)
+- `server-deployment/send-backup.php`: failed Telegram document uploads now retain the API's HTTP status and `description` (or the cURL transport error) in the delivery state and test result, instead of returning only a generic `TELEGRAM_SEND_FAILED`. This makes the actual cause of an HTTP 404 or other Telegram API response visible for diagnosis; it does not represent a live Telegram send test.
+
 ### Last known CI state
 After the latest known generator fix, the GitHub checks reported success for:
 - `powershell-parse`
