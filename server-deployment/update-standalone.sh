@@ -30,7 +30,7 @@ if [[ "${ATD_UPDATER_BOOTSTRAPPED:-0}" != "1" ]]; then
   # against BASH_SOURCE[0] is unreliable when the command is invoked through a
   # symlink/wrapper or a different path; it can leave an old updater in control.
   # Install atomically so an interrupted copy cannot truncate the executable updater.
-  BOOT_INSTALL_TMP="/usr/local/sbin/.atd-mikrotik-backup-update.$"
+  BOOT_INSTALL_TMP="/usr/local/sbin/.atd-mikrotik-backup-update.$$"
   install -o root -g root -m 0750 "$BOOT_UPDATER_TMP" "$BOOT_INSTALL_TMP"
   mv -f -- "$BOOT_INSTALL_TMP" /usr/local/sbin/atd-mikrotik-backup-update
   rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"
