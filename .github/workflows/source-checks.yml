@@ -13,20 +13,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y php-cli
-      - name: Check PHP syntax
+      - name: Check canonical PHP syntax
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          source = Path("windows-client/Generate-MikroTik-Backup.ps1").read_text(encoding="utf-8")
-          marker = "$php = @'"
-          start = source.index(marker) + len(marker)
-          start = source.index("\n", start) + 1
-          end = source.index("\n'@", start)
-          php = source[start:end].lstrip()
-          Path("/tmp/atd-generated-panel-lint.php").write_text(php, encoding="utf-8")
-          PY
           php -l server-deployment/send-backup.php
-          php -l /tmp/atd-generated-panel-lint.php
       - name: Check JavaScript and CSS syntax
         run: |
           node --check server-deployment/panel.js
@@ -56,23 +45,13 @@ jobs:
               start = source.index("\n", start) + 1
               end = source.index("\n'@", start)
               return source[start:end].rstrip("\r\n")
-          for name, path in (("php", "server-deployment/send-backup.php"),
-                             ("css", "server-deployment/panel.css"),
-                             ("js", "server-deployment/panel.js"),
-                             ("cronHelper", "server-deployment/cron-helper.sh")):
-              embedded = here_string(name)
-              canonical = Path(path).read_text(encoding="utf-8").rstrip("\r\n")
-              if embedded != canonical:
-                  raise SystemExit(f"Embedded {name} template differs from canonical {path}")
+          for name in ("php", "css", "js", "cronHelper"):
+              if f"${name} = @'" in source:
+                  raise SystemExit(f"Generator must not embed the versioned {name} application asset")
+          if "$configB64 = [Convert]::ToBase64String" not in source:
+              raise SystemExit("Generator must package only customer-specific private configuration")
           installer = here_string("installServer")
-          for key, value in {
-              "__PHP_SHA256__": "0" * 64,
-              "__CSS_SHA256__": "1" * 64,
-              "__JS_SHA256__": "2" * 64,
-              "__CRON_HELPER_SHA256__": "3" * 64,
-              "__CONFIG_B64__": "PD9waHA7",
-          }.items():
-              installer = installer.replace(key, value)
+          installer = installer.replace("__CONFIG_B64__", "PD9waHA7")
           path = Path("/tmp/atd-generated-bootstrap.sh")
           path.write_text(installer, encoding="utf-8")
           subprocess.run(["bash", "-n", str(path)], check=True)
