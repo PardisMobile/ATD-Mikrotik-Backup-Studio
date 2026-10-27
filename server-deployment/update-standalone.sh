@@ -42,7 +42,7 @@ fi
 # Pin every downloaded asset to the exact commit whose updater was bootstrapped.
 # This prevents a branch advance between bootstrap and asset download from
 # mixing updater logic from one revision with application files from another.
-COMMIT="\${ATD_SOURCE_COMMIT:-}"
+COMMIT="${ATD_SOURCE_COMMIT:-}"
 if [[ ! "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
   COMMIT_TMP=$(mktemp)
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
