@@ -34,7 +34,8 @@ Use a test router and a Linux server you control. The SFTP host and panel must b
 3. In panel mode, the installer creates the configured backup directory if it does not exist and grants the dedicated ATD panel service access to it. It does not require you to create a new SFTP account and does not change the existing SFTP credentials.
 4. Note the exact HTTPS URL printed by the installer. If remote access is needed, allow the selected TCP port in the server/provider firewall after checking existing firewall policy. The installer does not change firewall rules.
 5. Open that URL and sign in with the initial panel password. The default TLS certificate is self-signed, so a browser warning is expected.
-6. Sign in to the panel, enter the Telegram bot token and destination Chat ID in **Telegram delivery settings**, then use **Test Telegram connection**. It checks the configured backup folder and sends its newest `.backup` file (not a separate text message).
+6. **Start the bot first:** in Telegram, open your bot’s private chat and press **Start** or send `/start`. This is required before the bot can send backup files to your private chat; Telegram bots cannot initiate a private conversation with a user who has not started them.
+7. Sign in to the panel, enter the Telegram bot token and destination Chat ID in **Telegram delivery settings**, then use **Test Telegram connection**. It checks the configured backup folder and sends its newest `.backup` file (not a separate text message).
 
 ### 3. Configure the MikroTik
 1. Open the generated `paste-into-routeros-terminal.txt` and paste its full contents into the RouterOS 7 terminal on the test router.
