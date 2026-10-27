@@ -217,3 +217,10 @@ Do not expand this task into unrelated generator redesign, prompt/color polishin
 - Before editing, verify the repository is `PardisMobile/ATD-Mikrotik-Backup-Studio` and the target is `main`. Keep commits scoped to the requested project work.
 - Existing branches are legacy leftovers, not an approved workflow. Do not merge, recreate, or delete a branch blindly; first verify whether any unique work is needed and already present on `main`. The owner may remove unneeded legacy branches.
 - Branch names last observed during the 2026-10-27 review: `fix/cron-template-sync`, `fix/reviewed-generator-panel-issues`, and `fix/timezone-cron-updater-robustness`, besides `main`. This is a point-in-time observation, not a claim that those branches have since been deleted.
+
+
+### Updater postcondition fix — 2026-10-27
+- Updated `server-deployment/update-standalone.sh` on `main` to make timezone helper and sudo policy installation required, validate the installed sudoers rule, and verify the installed-source commit marker plus timezone helper/rule before printing the success message.
+- This prevents a successful status from being emitted if the marker/helper/policy that the panel itself checks are absent or invalid. The transaction's existing rollback trap remains active on failure.
+- Commit: `ba1ed72b3b8513545fa1247fc2ef5371bcaa11a5`.
+- Static syntax and full live Ubuntu rerun are still outstanding in this session. Do not claim the user's server is fixed until the updater is run and its output plus the read-only path checks confirm the marker, helper, and sudoers file.
