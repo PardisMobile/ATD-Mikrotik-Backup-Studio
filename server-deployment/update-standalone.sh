@@ -29,18 +29,27 @@ if [[ "${ATD_UPDATER_BOOTSTRAPPED:-0}" != "1" ]]; then
   # Always run the immutable latest updater once after fetching it. Comparing
   # against BASH_SOURCE[0] is unreliable when the command is invoked through a
   # symlink/wrapper or a different path; it can leave an old updater in control.
-  install -o root -g root -m 0750 "$BOOT_UPDATER_TMP" /usr/local/sbin/atd-mikrotik-backup-update
+  # Install atomically so an interrupted copy cannot truncate the executable updater.
+  BOOT_INSTALL_TMP="/usr/local/sbin/.atd-mikrotik-backup-update.$"
+  install -o root -g root -m 0750 "$BOOT_UPDATER_TMP" "$BOOT_INSTALL_TMP"
+  mv -f -- "$BOOT_INSTALL_TMP" /usr/local/sbin/atd-mikrotik-backup-update
   rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"
   trap - EXIT
   echo "Updater bootstrapped from GitHub commit $BOOT_COMMIT."
-  ATD_UPDATER_BOOTSTRAPPED=1 exec /usr/local/sbin/atd-mikrotik-backup-update
+  ATD_UPDATER_BOOTSTRAPPED=1 ATD_SOURCE_COMMIT="$BOOT_COMMIT" exec /usr/local/sbin/atd-mikrotik-backup-update
 fi
 
-COMMIT_TMP=$(mktemp)
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
-  'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$COMMIT_TMP"
-COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$COMMIT_TMP" | sed -n '1p')"
-rm -f -- "$COMMIT_TMP"
+# Pin every downloaded asset to the exact commit whose updater was bootstrapped.
+# This prevents a branch advance between bootstrap and asset download from
+# mixing updater logic from one revision with application files from another.
+COMMIT="\${ATD_SOURCE_COMMIT:-}"
+if [[ ! "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+  COMMIT_TMP=$(mktemp)
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+    'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$COMMIT_TMP"
+  COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$COMMIT_TMP" | sed -n '1p')"
+  rm -f -- "$COMMIT_TMP"
+fi
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable GitHub source commit; update aborted.' >&2; exit 5; }
 BASE="https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$COMMIT/server-deployment"
 
