@@ -94,8 +94,12 @@ function send_telegram_file(string $name, bool $force = false): array {
         if (!save_state($state)) return [false,'STATE_SAVE_FAILED'];
         return [true,'TELEGRAM_OK'];
     }
-    $state[$name]=['status'=>'failed','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'failed_at'=>gmdate('c'),'error'=>$curlError!==''?$curlError:('Telegram HTTP '.$http)]; save_state($state);
-    return [false,'TELEGRAM_SEND_FAILED'];
+    // Preserve Telegram's own API description (for example a 404 from an invalid endpoint/token)
+    // instead of collapsing every failure into an opaque generic message.
+    $apiDescription=is_array($result)?trim((string)($result['description']??'')):'';
+    $failure=$curlError!==''?('cURL: '.$curlError):('Telegram HTTP '.$http.($apiDescription!==''?': '.$apiDescription:''));
+    $state[$name]=['status'=>'failed','sha256'=>$hash,'size'=>$size,'mtime'=>filemtime($path),'failed_at'=>gmdate('c'),'error'=>$failure]; save_state($state);
+    return [false,'TELEGRAM_SEND_FAILED ('.$failure.')'];
 }
 function delivery_schedule_settings(): array {
     $state = load_state();
