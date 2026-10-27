@@ -201,3 +201,10 @@ The active work scope is limited to these three defects:
 The Windows generator's timezone selection was an intentionally added feature. The user confirms that timezone selection was added to the generator; do not treat it as an accidental regression or remove it as part of this scope. Preserve that feature and its existing choices/configuration behavior.
 
 Do not expand this task into unrelated generator redesign, prompt/color polishing, RouterOS timezone changes, Telegram/RADIUS changes, or other feature work. Preserve existing working behavior. Any changes beyond the three listed defects require a clear technical necessity and should be explained before implementation. Source/CI checks must be distinguished from live server validation.
+
+
+### Branch policy — user-confirmed, mandatory (2026-10-27)
+- **All project development and fixes must be committed directly to `main`. `main` is the only permitted working branch.**
+- Do not create or work on feature/fix branches, and do not use Pull Requests for this project.
+- Before editing, verify the repository and branch are `PardisMobile/ATD-Mikrotik-Backup-Studio` / `main`. Keep commits scoped to the user's requested project work.
+- If existing changes are on another branch or in a PR, do not treat that workflow as acceptable or continue it by default. Explain the state and move/reapply the relevant changes to `main` only with a safe, explicit plan; do not merge or close anything without the user's authorization.
