@@ -5,6 +5,8 @@ set -Eeuo pipefail
 APP=/opt/atd-mikrotik-backup-studio
 TLS=/etc/atd-mikrotik-backup-studio
 STATE=/var/lib/atd-mikrotik-backup-studio
+PHP_UNIT=/etc/systemd/system/atd-mikrotik-backup-php.service
+LEGACY_PANEL_SUDOERS=/etc/sudoers.d/atd-mikrotik-backup-panel-update
 for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installation not found ($path)." >&2; exit 3; }; done
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
@@ -111,7 +113,19 @@ grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
 grep -q 'TELEGRAM_NOT_CONFIGURED' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks Telegram setup checks; update aborted.' >&2; exit 6; }
 
-# No existing systemd service or timer is migrated, disabled, removed, or rewritten.
+# Validate the exact ATD-owned privilege boundary before starting a transaction.
+[[ -f "$PHP_UNIT" && ! -L "$PHP_UNIT" ]] || { echo 'Expected ATD PHP unit is missing or is not a regular file; update aborted.' >&2; exit 6; }
+[[ "$(stat -c '%u:%g:%a' "$PHP_UNIT")" == '0:0:644' ]] || { echo 'ATD PHP unit ownership/mode is unexpected; update aborted.' >&2; exit 6; }
+PHP_NNP_COUNT=$(grep -c '^NoNewPrivileges=' "$PHP_UNIT" || true)
+PHP_NNP_VALUE=$(sed -n 's/^NoNewPrivileges=//p' "$PHP_UNIT")
+[[ "$PHP_NNP_COUNT" -eq 1 && ( "$PHP_NNP_VALUE" == true || "$PHP_NNP_VALUE" == false ) ]] || { echo 'ATD PHP unit has an unexpected NoNewPrivileges setting; update aborted.' >&2; exit 6; }
+if [[ -e "$LEGACY_PANEL_SUDOERS" ]]; then
+  [[ -f "$LEGACY_PANEL_SUDOERS" && ! -L "$LEGACY_PANEL_SUDOERS" && "$(stat -c '%u:%g:%a' "$LEGACY_PANEL_SUDOERS")" == '0:0:440' ]] || { echo 'Legacy ATD panel sudoers file has unexpected ownership/mode; update aborted.' >&2; exit 6; }
+  LEGACY_RULES=$(grep -Ev '^[[:space:]]*(#|$)' "$LEGACY_PANEL_SUDOERS" || true)
+  [[ "$LEGACY_RULES" == 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-panel-update' ]] || { echo 'Legacy ATD panel sudoers file contains unexpected rules; update aborted without changing it.' >&2; exit 6; }
+fi
+
+# No unrelated systemd service or timer is migrated, disabled, removed, or rewritten.
 
 for f in send-backup.php panel.css panel.js; do
   [[ -f "$APP/$f" ]] && cp -p "$APP/$f" "$BACKUP/$f"
@@ -122,7 +136,7 @@ done
 
 # Snapshot every ATD-owned file this script can replace, excluding private config
 # and user data. A MISSING marker lets rollback remove only newly created files.
-for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" "$STATE/telegram-scan-started-at"; do
+for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-panel-timezone /etc/sudoers.d/atd-mikrotik-backup-panel-update /etc/systemd/system/atd-mikrotik-backup-php.service "$STATE/installed-source-commit" "$STATE/telegram-scan-started-at"; do
   if [[ -e "$path" ]]; then
     printf '%s\n' "$path" >> "$BACKUP/snapshots.list"
     cp -a --parents "$path" "$BACKUP/"
@@ -132,6 +146,7 @@ for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikroti
 done
 
 UPDATE_TRANSACTION=1
+PHP_UNIT_CHANGED=0
 rollback(){
   echo 'Update failed; restoring previous ATD files and service state.' >&2
   for f in send-backup.php panel.css panel.js; do
@@ -150,6 +165,7 @@ rollback(){
   chown root:atdbackup "$APP/send-backup.php" "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
   chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
+  if (( PHP_UNIT_CHANGED )); then systemctl daemon-reload 2>/dev/null || true; fi
   if (( PHP_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-php.service 2>/dev/null || true; fi
   if (( TLS_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
   if (( PHP_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-php.service 2>/dev/null || true; fi
@@ -213,6 +229,30 @@ visudo -cf /etc/sudoers.d/atd-panel-timezone >/dev/null || { echo 'Installed tim
 TIMEZONE_SUDOERS_META="$(stat -c '%u:%g:%a' /etc/sudoers.d/atd-panel-timezone 2>/dev/null || true)"
 [[ "$TIMEZONE_SUDOERS_META" == '0:0:440' ]] || { echo "Time-zone sudo rule ownership/permissions are invalid (expected root:root 0440; got ${TIMEZONE_SUDOERS_META:-unavailable}); update aborted." >&2; exit 7; }
 
+# Retire only the known legacy ATD panel-update sudo rule, preserving its file
+# but removing permission to launch the obsolete background updater. The PHP
+# service is then allowed to use the single restricted timezone sudo command.
+if [[ -e "$LEGACY_PANEL_SUDOERS" ]]; then
+  command -v runuser >/dev/null 2>&1 || { echo 'runuser is required to verify the retired panel-update sudo rule; update aborted.' >&2; exit 7; }
+  LEGACY_RULE_TMP=$(mktemp /etc/sudoers.d/atd-mikrotik-backup-panel-update.XXXXXX)
+  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$LEGACY_RULE_TMP"
+  chmod 0440 "$LEGACY_RULE_TMP"
+  visudo -cf "$LEGACY_RULE_TMP" >/dev/null || { rm -f "$LEGACY_RULE_TMP"; echo 'Replacement legacy ATD sudo rule failed validation; update aborted.' >&2; exit 7; }
+  install -o root -g root -m 0440 "$LEGACY_RULE_TMP" "$LEGACY_PANEL_SUDOERS"
+  rm -f "$LEGACY_RULE_TMP"
+  visudo -cf "$LEGACY_PANEL_SUDOERS" >/dev/null || { echo 'Updated legacy ATD sudoers file failed validation; update aborted.' >&2; exit 7; }
+fi
+
+if [[ "$PHP_NNP_VALUE" == true ]]; then
+  PHP_UNIT_TMP=$(mktemp /etc/systemd/system/.atd-mikrotik-backup-php.service.XXXXXX)
+  sed 's/^NoNewPrivileges=true$/NoNewPrivileges=false/' "$PHP_UNIT" > "$PHP_UNIT_TMP"
+  grep -q '^NoNewPrivileges=false$' "$PHP_UNIT_TMP" || { rm -f "$PHP_UNIT_TMP"; echo 'Could not prepare the ATD PHP privilege boundary update.' >&2; exit 7; }
+  install -o root -g root -m 0644 "$PHP_UNIT_TMP" "$PHP_UNIT"
+  rm -f "$PHP_UNIT_TMP"
+  PHP_UNIT_CHANGED=1
+  systemctl daemon-reload
+fi
+
 # Stop only ATD's web services while replacing ATD-owned app files. Existing
 # systemd services and timers outside this update's scope remain untouched.
 if (( PHP_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-php.service; fi
@@ -238,6 +278,7 @@ php -l "$APP/send-backup.php" >/dev/null
 if (( PHP_WAS_ACTIVE )); then
   systemctl start atd-mikrotik-backup-php.service
   systemctl is-active --quiet atd-mikrotik-backup-php.service
+  [[ "$(systemctl show -p NoNewPrivileges --value atd-mikrotik-backup-php.service)" == no ]] || { echo 'ATD PHP service privilege setting was not applied; update aborted.' >&2; exit 7; }
 fi
 if (( TLS_WAS_ACTIVE )); then
   systemctl start atd-mikrotik-backup-tls.service
@@ -266,6 +307,11 @@ mv -f "$STATE/installed-source-commit.tmp" "$STATE/installed-source-commit"
 [[ -x /usr/local/sbin/atd-mikrotik-backup-cron ]] || { echo 'Installed Cron helper is missing; update aborted.' >&2; exit 7; }
 [[ -f /etc/cron.d/atd-mikrotik-backup-apply && -f /etc/cron.d/atd-mikrotik-backup-telegram ]] || { echo 'Installed ATD Cron entries are incomplete; update aborted.' >&2; exit 7; }
 [[ -x /usr/local/sbin/atd-mikrotik-backup-set-timezone ]] || { echo 'Installed time-zone helper is missing; update aborted.' >&2; exit 7; }
+[[ "$(grep -c '^NoNewPrivileges=false$' "$PHP_UNIT")" -eq 1 ]] || { echo 'ATD PHP service must permit the restricted timezone sudo call; update aborted.' >&2; exit 7; }
+if [[ -e "$LEGACY_PANEL_SUDOERS" ]] && runuser -u atdbackup -- /usr/bin/sudo -n -l /usr/local/sbin/atd-mikrotik-backup-panel-update >/dev/null 2>&1; then
+  echo 'Obsolete panel-update sudo permission is still active; update aborted.' >&2
+  exit 7
+fi
 [[ -f /etc/sudoers.d/atd-panel-timezone ]] || { echo 'Installed time-zone sudo rule is missing; update aborted.' >&2; exit 7; }
 visudo -cf /etc/sudoers.d/atd-panel-timezone >/dev/null || { echo 'Installed time-zone sudo rule is invalid; update aborted.' >&2; exit 7; }
 UPDATE_TRANSACTION=0

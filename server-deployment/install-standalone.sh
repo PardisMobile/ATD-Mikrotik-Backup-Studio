@@ -138,6 +138,21 @@ if [[ ! -s "$TLS/server.crt" || ! -s "$TLS/server.key" ]]; then
   openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 -keyout "$TLS/server.key" -out "$TLS/server.crt" -subj "/CN=$IP" -addext "subjectAltName=IP:$IP" >/dev/null 2>&1
   chmod 0600 "$TLS/server.key"; chmod 0644 "$TLS/server.crt"
 fi
+# Revoke the known legacy panel-update command before allowing the PHP service
+# to use its one restricted sudo command. Preserve the ATD-owned file itself.
+LEGACY_PANEL_SUDOERS=/etc/sudoers.d/atd-mikrotik-backup-panel-update
+if [[ -e "$LEGACY_PANEL_SUDOERS" ]]; then
+  [[ -f "$LEGACY_PANEL_SUDOERS" && ! -L "$LEGACY_PANEL_SUDOERS" && "$(stat -c '%u:%g:%a' "$LEGACY_PANEL_SUDOERS")" == '0:0:440' ]] || { echo 'Legacy ATD panel sudoers file has unexpected ownership/mode; installer stopped without changing it.' >&2; exit 9; }
+  LEGACY_RULES=$(grep -Ev '^[[:space:]]*(#|$)' "$LEGACY_PANEL_SUDOERS" || true)
+  [[ "$LEGACY_RULES" == 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-panel-update' ]] || { echo 'Legacy ATD panel sudoers file contains unexpected rules; installer stopped without changing it.' >&2; exit 9; }
+  LEGACY_RULE_TMP=$(mktemp /etc/sudoers.d/atd-mikrotik-backup-panel-update.XXXXXX)
+  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$LEGACY_RULE_TMP"
+  chmod 0440 "$LEGACY_RULE_TMP"
+  visudo -cf "$LEGACY_RULE_TMP" >/dev/null || { rm -f "$LEGACY_RULE_TMP"; echo 'Replacement ATD sudo rule failed validation.' >&2; exit 9; }
+  install -o root -g root -m 0440 "$LEGACY_RULE_TMP" "$LEGACY_PANEL_SUDOERS"
+  rm -f "$LEGACY_RULE_TMP"
+  visudo -cf "$LEGACY_PANEL_SUDOERS" >/dev/null || { echo 'Updated legacy ATD sudoers file failed validation.' >&2; exit 9; }
+fi
 cat > /etc/systemd/system/atd-mikrotik-backup-php.service <<EOF
 [Unit]
 Description=ATD MikroTik Backup Studio PHP backend
@@ -151,7 +166,9 @@ Restart=on-failure
 RestartSec=3
 ProtectSystem=strict
 PrivateTmp=true
-NoNewPrivileges=true
+# The PHP service may invoke one fixed, root-owned timezone helper through sudo.
+# All other privilege escalation remains constrained by the dedicated sudoers rule.
+NoNewPrivileges=false
 ReadWritePaths=/var/lib/atd-mikrotik-backup-studio $BACKUP_DIR
 [Install]
 WantedBy=multi-user.target

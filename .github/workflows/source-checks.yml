@@ -124,8 +124,15 @@ jobs:
               raise SystemExit("Updater must fetch assets from one immutable commit snapshot")
           if "api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main" not in updater:
               raise SystemExit("Updater must resolve the immutable source commit before staging assets")
-          if "No existing systemd service or timer is migrated, disabled, removed, or rewritten." not in updater:
-              raise SystemExit("Updater must preserve existing systemd services and timers")
+          if "No unrelated systemd service or timer is migrated, disabled, removed, or rewritten." not in updater:
+              raise SystemExit("Updater must preserve all unrelated systemd services and timers")
+          if "atd-mikrotik-backup-php.service" not in updater or 'NoNewPrivileges=false' not in runtime:
+              raise SystemExit("Only the ATD PHP service may relax NoNewPrivileges for the restricted timezone helper")
+          legacy_sudoers = "/etc/sudoers.d/atd-mikrotik-backup-panel-update"
+          if legacy_sudoers not in snapshot or "Legacy ATD panel sudoers file contains unexpected rules" not in updater:
+              raise SystemExit("Updater must snapshot and safely retire only the known legacy ATD panel sudo rule")
+          if "/etc/systemd/system/atd-mikrotik-backup-php.service" not in snapshot:
+              raise SystemExit("Updater rollback snapshot must include the exact ATD PHP service unit")
           if "ATD_SOURCE_COMMIT" not in runtime or "SOURCE_COMMIT" not in runtime:
               raise SystemExit("Runtime installer must use the bootstrap's pinned source commit for updater download")
           if 'BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR' not in runtime or ' "$TLS/config.php"' not in runtime:

@@ -8,7 +8,7 @@ These rules are the project's source of truth. Future implementation, refactorin
 - The Linux system time zone and ATD Cron schedule time zone are independent settings. Applying a Linux time zone must call `timedatectl` and must not rewrite Cron; Cron uses `_cron_timezone` (or preserves its existing `CRON_TZ` during migration), with UTC as the fresh-install default.
 - AJAX forms must derive their request URL from `form.getAttribute('action')`, never the `form.action` DOM property, because the hidden `name="action"` field shadows that property and yields a 404 path.
 - PHP runs as `atdbackup`; root-owned 0750 helpers and 0440 sudoers files are intentionally not readable/executable directly by PHP. Readiness checks must use `sudo -n -l <fixed-command>` and must not treat `is_readable`/`is_executable` on those protected paths as proof that installation is missing.
-- Updates are terminal-only. Do not create or invoke a panel background Worker. Installers/updaters must preserve all existing systemd unit/timer files and must not disable or remove units.
+- Updates are terminal-only. Do not create or invoke a panel background Worker. Preserve unrelated systemd unit/timer files and never disable/remove units. The updater may change only the `NoNewPrivileges` directive in the ATD-owned PHP unit, because otherwise systemd blocks the explicitly sudo-authorized timezone helper; keep its other hardening directives. Retire only the known legacy ATD panel-update sudo rule so relaxing that one service property cannot reactivate the obsolete launcher.
 
 ### 1. Existing working core
 - The baseline is MikroTik Backup Studio v3 with working RouterOS 7 scheduled backups over SFTP.
