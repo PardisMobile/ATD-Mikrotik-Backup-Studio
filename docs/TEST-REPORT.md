@@ -12,6 +12,9 @@ Reviewed: 2026-10-28. This report separates repository/source checks from live-h
 - Updater: pins the updater and assets to one resolved commit, stages/syntax-checks before activation, snapshots ATD-owned files and relevant service states, applies within a lock/rollback boundary, and writes the installed-source marker only after required checks.
 - A post-deployment rollback audit found that an earlier updater snapshot listed `/etc/sudoers.d/atd-panel-update`, while the installer/updater actually writes `/etc/sudoers.d/atd-mikrotik-backup-panel-update`. The source now snapshots the exact file, CI asserts that the installer and rollback paths agree, and the corrected live snapshot was verified. Rollback failure injection remains reserved for a disposable host.
 - The earlier updater also ran `systemctl enable --now cron.service`, although the host Cron service was already active and enabled. Its effective state stayed unchanged, but the command could mutate shared SysV/systemd state. The current installer/updater instead require pre-existing active+enabled host Cron, abort with `HOST_CRON_NOT_READY` otherwise, and only write ATD-owned `/etc/cron.d` entries. CI guards against the old package-install and enable/start commands.
+- The final change was committed directly to `main` as `48654156fe908136aec96df5f0f1b851fb65f8dc`. Both GitHub Actions workflows passed. The official terminal updater bootstrapped and installed that exact commit, with a pre-update snapshot at `code-backup-20261027223907`.
+- Post-update, the installed-source marker matched `48654156fe908136aec96df5f0f1b851fb65f8dc`; PHP lint, helper shell syntax, both sudoers syntax checks, and both local panel HTTP endpoints passed (200). Installed PHP/JS/CSS SHA-256 values matched the source. ATD PHP/TLS and host Cron remained active/enabled. System timezone stayed `Etc/UTC` and the project Cron entry stayed `CRON_TZ=UTC`. The updater output contained no generic Cron enable/start operation.
+- The panel updater helper file was already present in the pre-update snapshot and was refreshed by the official updater. No panel-triggered updater was invoked: its systemd unit reports `LoadState=not-found` and `ActiveState=inactive`. No worker process was started. This is a file-level project helper, not a running worker.
 
 ## Repository/source checks
 
@@ -41,7 +44,7 @@ The observed Linux zone was `Etc/UTC`; Cron used `CRON_TZ=UTC`. No configured or
 
 ## Tests requiring a later controlled run
 
-- GitHub Actions for this final report-only commit (the two workflows for `bd21406` passed; this edit will run the same workflows again).
+- GitHub Actions for this report update (the two workflows for `4865415` passed; this edit will run the same workflows again).
 - Failure-injection rollback test on a disposable host. Do not test rollback by injecting failure on production.
 - Authenticated browser testing of panel navigation, successful timezone action, update status, and search/pagination.
 - Applying a different timezone would change host-wide timezone and Cron behavior; only do so with an explicit operational requirement and suitable window.
