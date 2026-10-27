@@ -65,7 +65,7 @@ The panel displays the Linux server's live date/time and detected system time zo
 ## Update
 To update an existing installation, run `sudo atd-mikrotik-backup-update`. The updater stages and syntax-checks the application, backs up the previous code, preserves private configuration, delivery state, and uploaded backups, removes obsolete ATD-only worker/timer units, and reapplies the dedicated Cron entry from saved delivery settings. It does not edit RouterOS scripts, third-party web-server configuration, or firewall rules.
 
-**One-time migration for installations whose updater predates the Linux time-zone control:** from a terminal, run `sudo atd-mikrotik-backup-update` twice in succession. If using the in-panel updater, start an update twice. The first run refreshes the installed updater; the second run installs the new restricted time-zone helper. Do not use the panel's Linux time-zone setting until both runs finish. Future updates should require only one run.
+**Updater self-refresh:** the updater checks and installs its current GitHub version before running migrations, then re-executes that refreshed copy. A single `sudo atd-mikrotik-backup-update` run should therefore apply the latest updater and its application/helper changes together. If an older installed updater cannot bootstrap itself, run the repository's current updater script once from the documented GitHub source, then use the installed command normally.
 
 ## Safety and limitations
 - ATD uses dedicated paths, service names, and ports. It does not edit Nginx/Apache configuration or automatically change host-wide firewall rules.
