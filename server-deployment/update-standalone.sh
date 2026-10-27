@@ -11,6 +11,31 @@ for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installat
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI is required; no packages were installed.' >&2; exit 4; }
 
+# Bootstrap the latest updater before performing application migrations. Replacing
+# the script at the end is too late: the current process would still run old
+# logic and require a second invocation for newly added migration steps.
+if [[ "${ATD_UPDATER_BOOTSTRAPPED:-0}" != "1" ]]; then
+  BOOT_COMMIT_TMP=$(mktemp)
+  BOOT_UPDATER_TMP=$(mktemp)
+  trap 'rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"' EXIT
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+    'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$BOOT_COMMIT_TMP"
+  BOOT_COMMIT="$(sed -n 's/^[[:space:]]*"sha": "\([0-9a-f]\{40\}\)",$/\1/p' "$BOOT_COMMIT_TMP" | sed -n '1p')"
+  [[ "$BOOT_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve the latest updater source commit.' >&2; exit 5; }
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+    "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$BOOT_COMMIT/server-deployment/update-standalone.sh" -o "$BOOT_UPDATER_TMP"
+  [[ -s "$BOOT_UPDATER_TMP" ]] || { echo 'Latest updater download is empty; update aborted.' >&2; exit 5; }
+  bash -n "$BOOT_UPDATER_TMP" || { echo 'Latest updater failed shell syntax validation.' >&2; exit 5; }
+  if ! cmp -s "$BOOT_UPDATER_TMP" "${BASH_SOURCE[0]}"; then
+    install -o root -g root -m 0750 "$BOOT_UPDATER_TMP" /usr/local/sbin/atd-mikrotik-backup-update
+    rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"
+    trap - EXIT
+    ATD_UPDATER_BOOTSTRAPPED=1 exec /usr/local/sbin/atd-mikrotik-backup-update
+  fi
+  rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"
+  trap - EXIT
+fi
+
 COMMIT_TMP=$(mktemp)
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
   'https://api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main' -o "$COMMIT_TMP"
@@ -335,13 +360,7 @@ else
   echo 'Warning: sudo, visudo, or systemd-run is unavailable; panel-triggered updates are disabled.' >&2
 fi
 
-# Updater self-refresh is mandatory for a successful transaction; otherwise the
-# application and its installed update mechanism would report different versions.
-NEXT_UPDATER=$(mktemp)
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/update-standalone.sh" -o "$NEXT_UPDATER"
-bash -n "$NEXT_UPDATER"
-install -o root -g root -m 0750 "$NEXT_UPDATER" /usr/local/sbin/atd-mikrotik-backup-update
-rm -f -- "$NEXT_UPDATER"
+# The updater was bootstrapped to the immutable source snapshot before migration.
 
 printf '%s\n' "$COMMIT" > "$STATE/installed-source-commit.tmp"
 chown root:atdbackup "$STATE/installed-source-commit.tmp"
