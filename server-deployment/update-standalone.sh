@@ -223,20 +223,21 @@ trap 'if (( UPDATE_TRANSACTION )); then rollback; fi' ERR
 # transaction. The panel must not temporarily lose this control while an update
 # is in progress; the transaction snapshot/rollback already covers both paths.
 install -o root -g root -m 0750 "$TMP/set-system-timezone.sh" /usr/local/sbin/atd-mikrotik-backup-set-timezone
-if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
-  TIMEZONE_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-timezone.XXXXXX)
-  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
-  chmod 0440 "$TIMEZONE_SUDOERS_TMP"
-  if visudo -cf "$TIMEZONE_SUDOERS_TMP" >/dev/null; then
-    install -o root -g root -m 0440 "$TIMEZONE_SUDOERS_TMP" /etc/sudoers.d/atd-panel-timezone
-    rm -f "$TIMEZONE_SUDOERS_TMP"
-  else
-    rm -f "$TIMEZONE_SUDOERS_TMP"
-    echo 'Warning: system time-zone control is disabled because its sudo rule failed validation.' >&2
-  fi
+[[ -x /usr/local/sbin/atd-mikrotik-backup-set-timezone ]] || { echo 'Time-zone helper installation failed; update aborted.' >&2; exit 7; }
+command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 || { echo 'sudo and visudo are required to install the restricted time-zone control rule; update aborted.' >&2; exit 7; }
+TIMEZONE_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-timezone.XXXXXX)
+printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-set-timezone' > "$TIMEZONE_SUDOERS_TMP"
+chmod 0440 "$TIMEZONE_SUDOERS_TMP"
+if visudo -cf "$TIMEZONE_SUDOERS_TMP" >/dev/null; then
+  install -o root -g root -m 0440 "$TIMEZONE_SUDOERS_TMP" /etc/sudoers.d/atd-panel-timezone
+  rm -f "$TIMEZONE_SUDOERS_TMP"
 else
-  echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
+  rm -f "$TIMEZONE_SUDOERS_TMP"
+  echo 'Restricted time-zone sudo rule failed validation; update aborted.' >&2
+  exit 7
 fi
+visudo -cf /etc/sudoers.d/atd-panel-timezone >/dev/null || { echo 'Installed time-zone sudo rule failed validation; update aborted.' >&2; exit 7; }
+[[ -f /etc/sudoers.d/atd-panel-timezone && ! -w /etc/sudoers.d/atd-panel-timezone ]] || { echo 'Time-zone sudo rule ownership/permissions are invalid; update aborted.' >&2; exit 7; }
 
 # Stop ATD's web services while replacing app files. Then migrate old scanner
 # units only after all downloaded assets have passed validation and are backed up.
@@ -366,6 +367,12 @@ printf '%s\n' "$COMMIT" > "$STATE/installed-source-commit.tmp"
 chown root:atdbackup "$STATE/installed-source-commit.tmp"
 chmod 0640 "$STATE/installed-source-commit.tmp"
 mv -f "$STATE/installed-source-commit.tmp" "$STATE/installed-source-commit"
+# Verify the exact postconditions that the panel's update and timezone checks read.
+[[ -s "$STATE/installed-source-commit" ]] || { echo 'Installed source commit marker was not written; update aborted.' >&2; exit 7; }
+[[ "$(cat "$STATE/installed-source-commit")" == "$COMMIT" ]] || { echo 'Installed source commit marker does not match this update; update aborted.' >&2; exit 7; }
+[[ -x /usr/local/sbin/atd-mikrotik-backup-set-timezone ]] || { echo 'Installed time-zone helper is missing; update aborted.' >&2; exit 7; }
+[[ -f /etc/sudoers.d/atd-panel-timezone ]] || { echo 'Installed time-zone sudo rule is missing; update aborted.' >&2; exit 7; }
+visudo -cf /etc/sudoers.d/atd-panel-timezone >/dev/null || { echo 'Installed time-zone sudo rule is invalid; update aborted.' >&2; exit 7; }
 UPDATE_TRANSACTION=0
 trap - ERR
 echo "ATD application updated successfully."
