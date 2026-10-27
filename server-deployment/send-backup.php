@@ -190,7 +190,20 @@ function render_panel(): void {
         $check=latest_github_commit(); $latest=$check['sha']; $installed=installed_source_commit();
         if ($latest===null) { echo json_encode(['status'=>'error','message'=>'GitHub check failed from the server. '.$check['reason']]); exit; }
         if ($installed===null) { echo json_encode(['status'=>'unknown','latest'=>$latest,'installed'=>null,'update_available'=>true,'message'=>'Installed version is not recorded yet; an update/migration run is recommended.']); exit; }
-        echo json_encode(['status'=>$latest===$installed?'current':'available','latest'=>$latest,'installed'=>$installed,'update_available'=>$latest!==$installed]); exit;
+        // A matching source commit is not sufficient if a required privileged
+        // helper was lost during a failed/rolled-back update. Treat missing
+        // timezone control assets as a repairable update condition.
+        $timezoneHelper='/usr/local/sbin/atd-mikrotik-backup-set-timezone';
+        $timezoneSudoers='/etc/sudoers.d/atd-panel-timezone';
+        $timezoneAssetsReady=is_executable('/usr/bin/sudo')
+            && is_executable($timezoneHelper)
+            && is_file($timezoneSudoers)
+            && is_readable($timezoneSudoers);
+        $sourceCurrent=($latest===$installed);
+        $needsRepair=(!$timezoneAssetsReady);
+        $status=(!$sourceCurrent || $needsRepair)?'available':'current';
+        $message=$needsRepair?'Required Linux time-zone helper or sudo policy is missing; run the terminal updater to repair it.':null;
+        echo json_encode(['status'=>$status,'latest'=>$latest,'installed'=>$installed,'update_available'=>(!$sourceCurrent || $needsRepair),'message'=>$message]); exit;
     }
     if (($_GET['ajax'] ?? '') === 'update_status' && !empty($_SESSION['admin'])) {
         header('Content-Type: application/json; charset=utf-8');
