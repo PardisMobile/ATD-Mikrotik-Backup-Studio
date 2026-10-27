@@ -77,7 +77,7 @@ This section records the user's current requirements and the latest attempted ch
 - Label option 4 simply “USA”; do not add “Washington DC”.
 - The Windows generator's selected zone is stored for the RouterOS script and Linux-side Cron schedule; installation must not silently change the host-wide system time zone. In panel Settings, the administrator may explicitly apply a zone to the Linux host and Cron using the restricted root-owned `timedatectl set-timezone` helper. This changes timezone presentation, not the system clock or NTP state. RouterOS uses its own clock/time-zone setting, so if the zone is changed after installation, show a clear warning to align RouterOS `time-zone-name` as well.
 - Keep existing backup frequency, custom times, SFTP settings, public port, panel password, and local-file-retention prompts/behavior intact.
-- Keep the generated output/package synchronized with canonical server files. Embedded PHP/CSS/JS/cron assets inside the PowerShell generator must match their canonical files under `server-deployment/`, unless the project intentionally documents a different versioning mechanism.
+- The Windows generator's responsibility is to collect customer-specific values and produce the RouterOS output plus `install.sh` containing only the private installation configuration. Do not embed duplicate PHP/CSS/JS/Cron application assets in the PowerShell generator. The generated `install.sh` must fetch the versioned server assets from GitHub using one immutable commit snapshot; the server installer/updater owns installing and updating those assets.
 
 ### Panel/UI requirements
 - Display the Linux server's current date/time and detected system time zone.
@@ -127,8 +127,8 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 
 ### Safe next-chat procedure
 1. Fetch current `main`, current commit SHA, all changed files, and latest CI results.
-2. Compare the generator against the last known-good version and inspect the diff, especially its final lines and all embedded here-strings.
-3. Compare embedded PHP/CSS/JS/cron with canonical `server-deployment/` files.
+2. Compare the generator against the last known-good version; verify it only collects user configuration, generates RouterOS output, and writes a private `install.sh`.
+3. Verify `install.sh` downloads the canonical server assets from one immutable GitHub commit and that no duplicate panel/Cron templates remain embedded in the generator.
 4. Review relevant official MikroTik and Ubuntu documentation for every RouterOS/system command used.
 5. Report in Persian, concisely: what is already correct, what is incomplete or risky, what CI proves, what remains untested, and a prioritized safe recovery plan.
 6. Do not commit further changes until the audit identifies a safe plan and the user authorizes implementation.
@@ -190,6 +190,14 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - The Windows generator already collects the default timezone from the user and places it in the PHP configuration. Do not treat this as an unresolved design question or ask the user to repeat it.
 - The user has repeatedly asked for a thorough inspection of the updater before edits, and actual code work—not recurring status-only reports or repeated explanations that the timezone helper is installed late in the updater. Investigate the real execution and rollback paths, identify a reproducible fault, and implement/test a substantive correction.
 - Be precise about work: source review is not a fix; do not report completed implementation or live-server validation unless actually performed. The current task is to continue from the actual repo state and deliver code changes after full impact review.
+
+
+### Generator responsibility clarification — 2026-10-27
+- The generator collects the user's setup values and creates the RouterOS script/scheduler output and (panel mode) the customer-specific `install.sh`.
+- All versioned server application files (PHP, CSS, JavaScript, Cron helper, and installer components) are sourced from GitHub at installation time, pinned to one immutable commit. Do not duplicate these application files inside the Windows generator.
+- The generated `install.sh` contains private customer configuration only; protect it from publication and retain its existing file-permission hardening.
+- This refactor removes redundant embedded copies only. Preserve the intentional timezone selector and its generated configuration value.
+- Active issue scope remains: panel timezone fix, panel updater fix, and correction of the terminal install/update command so it obtains and installs all required files. Do not expand scope to unrelated generator/UI or Telegram behavior.
 
 
 ### Explicit scope correction — 2026-10-27 (authoritative)
