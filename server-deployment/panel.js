@@ -67,13 +67,15 @@
     try{
       const response=await fetch(form.action||location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
       if(!response.ok)throw new Error('Request failed ('+response.status+')');
-      if(form.querySelector('[name="action"]')?.value==='telegram_test'){
+      const action=form.querySelector('[name="action"]')?.value;
+      if(action==='telegram_test'||action==='update_start'){
         const data=await response.json();
-        showMessage(data.message||'Telegram test finished.',!!data.ok);
+        showMessage(data.message||(action==='telegram_test'?'Telegram test finished.':'Update request finished.'),!!data.ok);
+        if(action==='update_start'&&data.ok)pollUpdateStatus();
         return;
       }
       const html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html');
-      const updateStarted=isUpdateForm&&(parsed.querySelector('.alert')?.textContent||'').includes('UPDATE_STARTED');
+      const updateStarted=false;
       const fresh=parsed.querySelector('.app-shell'),current=document.querySelector('.app-shell');
       if(!fresh||!current)throw new Error('Unexpected response from panel.');
       current.replaceWith(fresh);
