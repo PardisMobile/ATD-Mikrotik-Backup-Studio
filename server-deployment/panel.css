@@ -54,3 +54,30 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
  #checkUpdateStatus{margin:0 15px 18px}
  .update-panel,.timezone-panel{margin-bottom:20px}
 }
+
+/* Subtle, state-aware motion for the existing panel UI. */
+:root{--atd-motion-fast:160ms;--atd-motion-normal:240ms;--atd-motion-ease:cubic-bezier(.2,.7,.25,1)}
+.btn,.icon-btn,.language-btn,.page-link,.side-tab,.guide-link,.guide-card{transition-timing-function:var(--atd-motion-ease)}
+.btn:active:not(:disabled),.icon-btn:active:not(:disabled),.language-btn:active,.page-link:active,.side-tab:active{transform:translateY(1px) scale(.985)}
+.btn:focus-visible,.icon-btn:focus-visible,.language-btn:focus-visible,.side-tab:focus-visible,.guide-link:focus-visible,.page-link:focus-visible{outline:3px solid color-mix(in srgb,var(--blue) 38%,transparent);outline-offset:3px}
+.password-form input,.login-form input,.telegram-form input,.timezone-form select,.timezone-form input{transition:border-color var(--atd-motion-fast) var(--atd-motion-ease),box-shadow var(--atd-motion-fast) var(--atd-motion-ease),background-color var(--atd-motion-normal) var(--atd-motion-ease),color var(--atd-motion-normal) var(--atd-motion-ease)}
+.sidebar,.files-panel,.stat-card,.login-card,.panel-heading,.guide-card,.password-form,.language-btn,.icon-btn,.search-box,.file-icon,.status-pill,.timezone-form select,.timezone-form input,.telegram-form input{transition:background-color var(--atd-motion-normal) var(--atd-motion-ease),color var(--atd-motion-normal) var(--atd-motion-ease),border-color var(--atd-motion-normal) var(--atd-motion-ease),box-shadow var(--atd-motion-normal) var(--atd-motion-ease)}
+
+/* Animate both directions where the browser supports discrete display transitions. */
+@supports (transition-behavior:allow-discrete){
+ [data-panel-section]{opacity:1;transform:translateY(0);transition:opacity var(--atd-motion-normal) var(--atd-motion-ease),transform var(--atd-motion-normal) var(--atd-motion-ease),display var(--atd-motion-normal) allow-discrete}
+ [data-panel-section][hidden]{opacity:0;transform:translateY(7px)}
+ @starting-style{[data-panel-section]:not([hidden]){opacity:0;transform:translateY(7px)}}
+}
+
+.is-loading{position:relative}
+.btn.is-loading::after,.icon-btn.is-loading::after{content:"";width:14px;height:14px;flex:0 0 14px;border:2px solid currentColor;border-inline-end-color:transparent;border-radius:50%;animation:atd-spin .7s linear infinite}
+.alert-success,.alert-error{animation:atd-feedback-in 240ms var(--atd-motion-ease) both}
+#checkUpdateStatus[aria-live="polite"]{transition:color var(--atd-motion-fast) var(--atd-motion-ease),opacity var(--atd-motion-fast) var(--atd-motion-ease)}
+@keyframes atd-spin{to{transform:rotate(360deg)}}
+@keyframes atd-feedback-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){
+ [data-panel-section],.btn,.icon-btn,.language-btn,.page-link,.side-tab,.guide-link,.guide-card,.sidebar,.files-panel,.stat-card,.login-card,.panel-heading,.password-form,.search-box,.file-icon,.status-pill,.timezone-form select,.timezone-form input,.telegram-form input,#checkUpdateStatus[aria-live="polite"]{scroll-behavior:auto!important;transition:none!important;animation:none!important;transform:none!important}
+ .btn.is-loading::after,.icon-btn.is-loading::after{animation:none}
+ .btn:active:not(:disabled),.icon-btn:active:not(:disabled),.language-btn:active,.page-link:active,.side-tab:active{transform:none}
+}
