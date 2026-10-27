@@ -15,6 +15,20 @@ if [[ -r /etc/os-release ]]; then
   fi
 fi
 
+# Cron is shared host infrastructure. ATD may manage its own /etc/cron.d files,
+# but must not install or change the host Cron daemon.
+command -v systemctl >/dev/null 2>&1 || { echo 'HOST_CRON_NOT_READY: systemctl is required to verify the host Cron service.' >&2; exit 10; }
+CRON_UNIT=""
+if systemctl cat cron.service >/dev/null 2>&1; then
+  CRON_UNIT=cron.service
+elif systemctl cat crond.service >/dev/null 2>&1; then
+  CRON_UNIT=crond.service
+fi
+if [[ -z "$CRON_UNIT" ]] || ! systemctl is-active --quiet "$CRON_UNIT" || ! systemctl is-enabled --quiet "$CRON_UNIT"; then
+  echo 'HOST_CRON_NOT_READY: an existing host Cron service must already be active and enabled. ATD will not install or change this shared service.' >&2
+  exit 10
+fi
+
 # Do not try to identify third-party panels or web stacks. Only recognize our own service
 # for safe re-install behavior; all third-party services/configuration remain out of scope.
 EXISTING_INSTALL=0
@@ -175,30 +189,9 @@ fi
 systemctl is-active --quiet atd-mikrotik-backup-php.service
 systemctl is-active --quiet atd-mikrotik-backup-tls.service
 
-# Install/enable cron only when no cron daemon is already active.
-# ATD adds one dedicated /etc/cron.d entry and never edits existing user crontabs.
-# Install cron only when its service unit is absent. An installed but inactive
-# daemon is recovered below rather than reinstalling packages over host state.
-if ! systemctl cat cron.service >/dev/null 2>&1 && ! systemctl cat crond.service >/dev/null 2>&1; then
-  if command -v apt-get >/dev/null 2>&1; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y cron
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y cronie
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y cronie
-  else
-    echo 'A running cron service is required for automatic Telegram delivery.' >&2; exit 10
-  fi
-fi
-if systemctl cat cron.service >/dev/null 2>&1; then
-  systemctl enable --now cron.service
-elif systemctl cat crond.service >/dev/null 2>&1; then
-  systemctl enable --now crond.service
-else
-  echo 'Could not locate the cron service after installation.' >&2; exit 10
-fi
+# Recheck the precondition before writing ATD-owned Cron files. Never install,
+# enable, start, stop, or otherwise repair the shared host daemon.
+systemctl is-active --quiet "$CRON_UNIT" && systemctl is-enabled --quiet "$CRON_UNIT" || { echo 'HOST_CRON_NOT_READY: host Cron became inactive or disabled during install; aborting.' >&2; exit 10; }
 if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
   date +%s > "$STATE/telegram-scan-started-at"
   chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"

@@ -112,6 +112,12 @@ jobs:
           panel_sudoers = "/etc/sudoers.d/atd-mikrotik-backup-panel-update"
           if panel_sudoers not in snapshot or "/etc/sudoers.d/atd-panel-update " in snapshot:
               raise SystemExit("Updater rollback snapshot must include the exact in-panel updater sudoers path")
+          if "HOST_CRON_NOT_READY" not in runtime or "HOST_CRON_NOT_READY" not in updater:
+              raise SystemExit("Installer and updater must require a pre-existing active and enabled host Cron service")
+          for path, script in (("installer", runtime), ("updater", updater)):
+              forbidden = ("systemctl enable --now cron.service", "systemctl enable --now crond.service", "apt-get install -y cron", "dnf install -y cronie", "yum install -y cronie")
+              if any(command in script for command in forbidden):
+                  raise SystemExit(f"{path} must not install, enable, or start the shared host Cron daemon")
           if panel_sudoers not in runtime:
               raise SystemExit("Installer and updater must use the same in-panel updater sudoers path")
           if 'raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment' in updater:

@@ -11,6 +11,7 @@ Reviewed: 2026-10-28. This report separates repository/source checks from live-h
 - Timezone: panel state/config selects the Linux display and Cron `CRON_TZ`; the root-owned helper validates the IANA zone and calls `timedatectl`. A real timezone application changes host timezone and was not part of the read-only audit.
 - Updater: pins the updater and assets to one resolved commit, stages/syntax-checks before activation, snapshots ATD-owned files and relevant service states, applies within a lock/rollback boundary, and writes the installed-source marker only after required checks.
 - A post-deployment rollback audit found that an earlier updater snapshot listed `/etc/sudoers.d/atd-panel-update`, while the installer/updater actually writes `/etc/sudoers.d/atd-mikrotik-backup-panel-update`. The source now snapshots the exact file, CI asserts that the installer and rollback paths agree, and the corrected live snapshot was verified. Rollback failure injection remains reserved for a disposable host.
+- The earlier updater also ran `systemctl enable --now cron.service`, although the host Cron service was already active and enabled. Its effective state stayed unchanged, but the command could mutate shared SysV/systemd state. The current installer/updater instead require pre-existing active+enabled host Cron, abort with `HOST_CRON_NOT_READY` otherwise, and only write ATD-owned `/etc/cron.d` entries. CI guards against the old package-install and enable/start commands.
 
 ## Repository/source checks
 

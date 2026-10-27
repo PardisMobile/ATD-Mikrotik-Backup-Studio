@@ -19,7 +19,7 @@ These rules are the project's source of truth. Future implementation, refactorin
 ### 3. One-command server bootstrap from the generated output
 - The EXE must produce a server-specific output/package that carries the initial configuration needed to bootstrap that installation, as well as the RouterOS-side output.
 - The user transfers the server bootstrap output to the Linux server, copies/pastes the single provided command, and presses Enter.
-- That command must automatically configure the server using the initial values collected by the EXE: create required directories/files, install only missing prerequisites, configure the ATD panel, the server-side Telegram scanner Cron entries, and fetch shared/versioned application components from GitHub when needed.
+- That command must automatically configure the server using the initial values collected by the EXE: create required directories/files, install only missing project prerequisites, configure the ATD panel and its server-side Telegram scanner Cron entries, and fetch shared/versioned application components from GitHub when needed. The host Cron daemon is shared infrastructure: it must already be active and enabled; installation/update must stop with `HOST_CRON_NOT_READY` instead of installing, enabling, starting, stopping, or repairing it.
 - The user must not be asked to manually transfer or construct individual PHP, CSS, JavaScript, or other internal panel files.
 - The install command and its prerequisites must be clearly identified in the generated output and in the README. Keep the workflow simple for non-technical users.
 

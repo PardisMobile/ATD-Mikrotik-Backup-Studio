@@ -57,6 +57,24 @@ BASE="https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/
 exec 9>"$STATE/update.lock"
 flock -n 9 || { echo 'Another ATD update is already running.' >&2; exit 9; }
 
+# Cron is a host-shared scheduler. The updater may write ATD-owned Cron files,
+# but it must never install, enable, start, stop, or otherwise repair the daemon.
+CRON_UNIT=""
+CRON_WAS_ACTIVE=0; CRON_WAS_ENABLED=0
+if systemctl cat cron.service >/dev/null 2>&1; then
+  CRON_UNIT=cron.service
+elif systemctl cat crond.service >/dev/null 2>&1; then
+  CRON_UNIT=crond.service
+fi
+if [[ -n "$CRON_UNIT" ]]; then
+  systemctl is-active --quiet "$CRON_UNIT" && CRON_WAS_ACTIVE=1 || true
+  systemctl is-enabled --quiet "$CRON_UNIT" && CRON_WAS_ENABLED=1 || true
+fi
+if [[ -z "$CRON_UNIT" || "$CRON_WAS_ACTIVE" -ne 1 || "$CRON_WAS_ENABLED" -ne 1 ]]; then
+  echo 'HOST_CRON_NOT_READY: an existing host Cron service must already be active and enabled. ATD will not install or change this shared service.' >&2
+  exit 4
+fi
+
 TMP=$(mktemp -d /tmp/atd-update.XXXXXX)
 chmod 0700 "$TMP"
 STAMP=$(date +%Y%m%d%H%M%S)
@@ -77,21 +95,10 @@ trap cleanup EXIT
 # touching code. The update must stop them during replacement and restore state.
 PHP_WAS_ACTIVE=0; TLS_WAS_ACTIVE=0
 PHP_WAS_ENABLED=0; TLS_WAS_ENABLED=0
-CRON_UNIT=""
-CRON_WAS_ACTIVE=0; CRON_WAS_ENABLED=0
 systemctl is-active --quiet atd-mikrotik-backup-php.service && PHP_WAS_ACTIVE=1 || true
 systemctl is-active --quiet atd-mikrotik-backup-tls.service && TLS_WAS_ACTIVE=1 || true
 systemctl is-enabled --quiet atd-mikrotik-backup-php.service && PHP_WAS_ENABLED=1 || true
 systemctl is-enabled --quiet atd-mikrotik-backup-tls.service && TLS_WAS_ENABLED=1 || true
-if systemctl cat cron.service >/dev/null 2>&1; then
-  CRON_UNIT=cron.service
-elif systemctl cat crond.service >/dev/null 2>&1; then
-  CRON_UNIT=crond.service
-fi
-if [[ -n "$CRON_UNIT" ]]; then
-  systemctl is-active --quiet "$CRON_UNIT" && CRON_WAS_ACTIVE=1 || true
-  systemctl is-enabled --quiet "$CRON_UNIT" && CRON_WAS_ENABLED=1 || true
-fi
 
 for f in send-backup.php panel.css panel.js cron-helper.sh set-system-timezone.sh; do
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 "$BASE/$f" -o "$TMP/$f"
@@ -173,12 +180,6 @@ rollback(){
   if (( TLS_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
   if (( PHP_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-php.service 2>/dev/null || true; fi
   if (( TLS_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
-  # Cron is part of the updater's transaction too: restore its pre-update
-  # enabled/active state rather than leaving a host daemon changed on rollback.
-  if [[ -n "$CRON_UNIT" ]]; then
-    if (( CRON_WAS_ENABLED )); then systemctl enable "$CRON_UNIT" 2>/dev/null || true; else systemctl disable "$CRON_UNIT" 2>/dev/null || true; fi
-    if (( CRON_WAS_ACTIVE )); then systemctl start "$CRON_UNIT" 2>/dev/null || true; else systemctl stop "$CRON_UNIT" 2>/dev/null || true; fi
-  fi
   # Verify restoration rather than silently treating best-effort commands as success.
   local rollback_failed=0
   for f in send-backup.php panel.css panel.js; do
@@ -206,7 +207,7 @@ rollback(){
     current_active=0; current_enabled=0
     systemctl is-active --quiet "$CRON_UNIT" && current_active=1 || true
     systemctl is-enabled --quiet "$CRON_UNIT" && current_enabled=1 || true
-    (( current_active == CRON_WAS_ACTIVE && current_enabled == CRON_WAS_ENABLED )) || { echo "Rollback verification failed: $CRON_UNIT state was not restored." >&2; rollback_failed=1; }
+    (( current_active == CRON_WAS_ACTIVE && current_enabled == CRON_WAS_ENABLED )) || { echo "Rollback verification failed: shared host Cron state changed during the update." >&2; rollback_failed=1; }
   fi
   if [[ -s "$BACKUP/legacy-unit-states" ]]; then
     while read -r unit active enabled; do
@@ -288,29 +289,7 @@ if (( TLS_WAS_ACTIVE )); then
   systemctl start atd-mikrotik-backup-tls.service
   systemctl is-active --quiet atd-mikrotik-backup-tls.service
 fi
-# Ensure cron is available without editing any existing crontabs.
-# Install cron only when its service unit is absent. An installed but inactive
-# daemon is recovered below rather than reinstalling packages over host state.
-if ! systemctl cat cron.service >/dev/null 2>&1 && ! systemctl cat crond.service >/dev/null 2>&1; then
-  if command -v apt-get >/dev/null 2>&1; then
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -y
-    apt-get install -y cron
-  elif command -v dnf >/dev/null 2>&1; then
-    dnf install -y cronie
-  elif command -v yum >/dev/null 2>&1; then
-    yum install -y cronie
-  else
-    echo 'A running cron service is required for automatic Telegram delivery.' >&2; exit 4
-  fi
-fi
-if systemctl cat cron.service >/dev/null 2>&1; then
-  systemctl enable --now cron.service
-elif systemctl cat crond.service >/dev/null 2>&1; then
-  systemctl enable --now crond.service
-else
-  echo 'Could not locate the cron service after installation.' >&2; exit 4
-fi
+systemctl is-active --quiet "$CRON_UNIT" && systemctl is-enabled --quiet "$CRON_UNIT" || { echo 'HOST_CRON_NOT_READY: host Cron became inactive or disabled during update; aborting.' >&2; exit 4; }
 if [[ ! -s "$STATE/telegram-scan-started-at" ]]; then
   date +%s > "$STATE/telegram-scan-started-at"
   chown atdbackup:atdbackup "$STATE/telegram-scan-started-at"
