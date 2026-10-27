@@ -21,10 +21,14 @@
     const form=zoneSelect.closest('form'),manual=form&&form.querySelector('[name="timezone_manual"]');
     if(manual){manual.hidden=zoneSelect.value!=='Manual';manual.required=zoneSelect.value==='Manual';}
   }
+  let messageTimer=null;
   function showMessage(message,ok){
     let box=document.querySelector('.ajax-message');
     if(!box){box=document.createElement('div');box.className='alert ajax-message';const main=document.querySelector('.main-content');if(main)main.prepend(box);}
+    if(messageTimer!==null)clearTimeout(messageTimer);
     box.textContent=message;box.classList.toggle('alert-success',!!ok);box.classList.toggle('alert-error',!ok);
+    box.hidden=false;
+    messageTimer=setTimeout(()=>{if(box.isConnected){box.hidden=true;box.textContent='';}},7000);
   }
   async function loadPage(url){
     const response=await fetch(url,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
