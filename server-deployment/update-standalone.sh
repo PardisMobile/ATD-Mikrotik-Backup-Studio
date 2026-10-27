@@ -7,7 +7,6 @@ TLS=/etc/atd-mikrotik-backup-studio
 STATE=/var/lib/atd-mikrotik-backup-studio
 for path in "$APP" "$TLS" "$STATE"; do [[ -d "$path" ]] || { echo "ATD installation not found ($path)." >&2; exit 3; }; done
 [[ -s "$TLS/config.php" ]] || { echo 'Private first-run configuration is missing; update aborted.' >&2; exit 3; }
-# Legacy ATD worker cleanup is deferred until the new assets pass validation.
 command -v curl >/dev/null 2>&1 || { echo 'curl is required; no packages were installed.' >&2; exit 4; }
 command -v php >/dev/null 2>&1 || { echo 'PHP CLI is required; no packages were installed.' >&2; exit 4; }
 
@@ -53,7 +52,7 @@ fi
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Could not resolve immutable GitHub source commit; update aborted.' >&2; exit 5; }
 BASE="https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$COMMIT/server-deployment"
 
-# Serialize terminal and panel-triggered updater executions.
+# Serialize terminal updater executions.
 exec 9>"$STATE/update.lock"
 flock -n 9 || { echo 'Another ATD update is already running.' >&2; exit 9; }
 
@@ -112,23 +111,7 @@ grep -q "require_once '/etc/atd-mikrotik-backup-studio/config.php';" "$TMP/send-
 grep -q 'function telegram_settings()' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks panel-managed Telegram settings; update aborted.' >&2; exit 6; }
 grep -q 'TELEGRAM_NOT_CONFIGURED' "$TMP/send-backup.php" || { echo 'Downloaded PHP lacks Telegram setup checks; update aborted.' >&2; exit 6; }
 
-# Do not disable legacy services or touch live files until all replacement assets validate.
-# This release migrates obsolete systemd scanner/worker timers to the ATD-owned
-# Cron scanner. Snapshot each legacy unit plus its active/enabled state first.
-
-LEGACY_UNITS=(
-  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
-  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
-  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
-  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
-)
-: > "$BACKUP/legacy-unit-states"
-for unit in "${LEGACY_UNITS[@]}"; do
-  active=0; enabled=0
-  systemctl is-active --quiet "$unit" 2>/dev/null && active=1 || true
-  systemctl is-enabled --quiet "$unit" 2>/dev/null && enabled=1 || true
-  printf '%s %s %s\n' "$unit" "$active" "$enabled" >> "$BACKUP/legacy-unit-states"
-done
+# No existing systemd service or timer is migrated, disabled, removed, or rewritten.
 
 for f in send-backup.php panel.css panel.js; do
   [[ -f "$APP/$f" ]] && cp -p "$APP/$f" "$BACKUP/$f"
@@ -139,7 +122,7 @@ done
 
 # Snapshot every ATD-owned file this script can replace, excluding private config
 # and user data. A MISSING marker lets rollback remove only newly created files.
-for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-panel-update-worker /usr/local/sbin/atd-mikrotik-backup-panel-update /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-mikrotik-backup-panel-update /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" "$STATE/telegram-scan-started-at" /etc/systemd/system/atd-mikrotik-backup-telegram-scan.service /etc/systemd/system/atd-mikrotik-backup-telegram-scan.timer /etc/systemd/system/atd-mikrotik-backup-telegram-worker.service /etc/systemd/system/atd-mikrotik-backup-telegram-worker.timer /etc/systemd/system/atd-mikrotik-backup-worker.service /etc/systemd/system/atd-mikrotik-backup-worker.timer /etc/systemd/system/atd-mikrotik-backup-scanner.service /etc/systemd/system/atd-mikrotik-backup-scanner.timer; do
+for path in /usr/local/sbin/atd-mikrotik-backup-cron /usr/local/sbin/atd-mikrotik-backup-set-timezone /usr/local/sbin/atd-mikrotik-backup-update /etc/cron.d/atd-mikrotik-backup-apply /etc/cron.d/atd-mikrotik-backup-telegram /etc/sudoers.d/atd-panel-timezone "$STATE/installed-source-commit" "$STATE/telegram-scan-started-at"; do
   if [[ -e "$path" ]]; then
     printf '%s\n' "$path" >> "$BACKUP/snapshots.list"
     cp -a --parents "$path" "$BACKUP/"
@@ -167,15 +150,6 @@ rollback(){
   chown root:atdbackup "$APP/send-backup.php" "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
   chmod 0640 "$APP/send-backup.php" 2>/dev/null || true
   chmod 0644 "$APP/panel.css" "$APP/panel.js" 2>/dev/null || true
-  systemctl daemon-reload 2>/dev/null || true
-  # Reconstitute the old systemd migration state if any later update step failed.
-  if [[ -s "$BACKUP/legacy-unit-states" ]]; then
-    while read -r unit active enabled; do
-      [[ -n "$unit" ]] || continue
-      if (( enabled )); then systemctl enable "$unit" 2>/dev/null || true; else systemctl disable "$unit" 2>/dev/null || true; fi
-      if (( active )); then systemctl start "$unit" 2>/dev/null || true; else systemctl stop "$unit" 2>/dev/null || true; fi
-    done < "$BACKUP/legacy-unit-states"
-  fi
   if (( PHP_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-php.service 2>/dev/null || true; fi
   if (( TLS_WAS_ENABLED )); then systemctl enable atd-mikrotik-backup-tls.service 2>/dev/null || true; else systemctl disable atd-mikrotik-backup-tls.service 2>/dev/null || true; fi
   if (( PHP_WAS_ACTIVE )); then systemctl restart atd-mikrotik-backup-php.service 2>/dev/null || true; else systemctl stop atd-mikrotik-backup-php.service 2>/dev/null || true; fi
@@ -209,17 +183,6 @@ rollback(){
     systemctl is-enabled --quiet "$CRON_UNIT" && current_enabled=1 || true
     (( current_active == CRON_WAS_ACTIVE && current_enabled == CRON_WAS_ENABLED )) || { echo "Rollback verification failed: shared host Cron state changed during the update." >&2; rollback_failed=1; }
   fi
-  if [[ -s "$BACKUP/legacy-unit-states" ]]; then
-    while read -r unit active enabled; do
-      current_active=0; current_enabled=0
-      systemctl is-active --quiet "$unit" 2>/dev/null && current_active=1 || true
-      systemctl is-enabled --quiet "$unit" 2>/dev/null && current_enabled=1 || true
-      if (( current_active != active || current_enabled != enabled )); then
-        echo "Rollback verification failed: legacy unit $unit state was not restored." >&2
-        rollback_failed=1
-      fi
-    done < "$BACKUP/legacy-unit-states"
-  fi
   if (( rollback_failed )); then
     echo "CRITICAL: rollback was incomplete. Review the pre-update snapshot at $BACKUP and systemd state before retrying." >&2
   else
@@ -250,18 +213,10 @@ visudo -cf /etc/sudoers.d/atd-panel-timezone >/dev/null || { echo 'Installed tim
 TIMEZONE_SUDOERS_META="$(stat -c '%u:%g:%a' /etc/sudoers.d/atd-panel-timezone 2>/dev/null || true)"
 [[ "$TIMEZONE_SUDOERS_META" == '0:0:440' ]] || { echo "Time-zone sudo rule ownership/permissions are invalid (expected root:root 0440; got ${TIMEZONE_SUDOERS_META:-unavailable}); update aborted." >&2; exit 7; }
 
-# Stop ATD's web services while replacing app files. Then migrate old scanner
-# units only after all downloaded assets have passed validation and are backed up.
+# Stop only ATD's web services while replacing ATD-owned app files. Existing
+# systemd services and timers outside this update's scope remain untouched.
 if (( PHP_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-php.service; fi
 if (( TLS_WAS_ACTIVE )); then systemctl stop atd-mikrotik-backup-tls.service; fi
-for unit in "${LEGACY_UNITS[@]}"; do
-  unit_file="/etc/systemd/system/$unit"
-  if systemctl cat "$unit" >/dev/null 2>&1 || [[ -e "$unit_file" ]]; then
-    systemctl disable --now "$unit" 2>/dev/null || true
-    rm -f -- "$unit_file"
-  fi
-done
-systemctl daemon-reload
 install -o root -g root -m 0750 "$TMP/cron-helper.sh" /usr/local/sbin/atd-mikrotik-backup-cron
 cat > /etc/cron.d/atd-mikrotik-backup-apply <<'CRON'
 * * * * * root /usr/local/sbin/atd-mikrotik-backup-cron --apply >/dev/null 2>&1
@@ -277,7 +232,6 @@ mv -f "$APP/panel.js.new" "$APP/panel.js"
 chown root:atdbackup "$APP/send-backup.php"
 chmod 0640 "$APP/send-backup.php"
 chmod 0644 "$APP/panel.css" "$APP/panel.js"
-systemctl daemon-reload
 php -l "$APP/send-backup.php" >/dev/null
 # Restart/start only services that were active before the update. Preserve an
 # intentional stopped/disabled service instead of changing the host's choice.
@@ -298,57 +252,7 @@ fi
 /usr/local/sbin/atd-mikrotik-backup-cron --apply
 
 
-# Install a narrowly-scoped, root-owned launcher for panel-triggered updates.
-if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1; then
-  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update-worker <<'ATD_WORKER'
-#!/usr/bin/env bash
-set +e
-STATE=/var/lib/atd-mikrotik-backup-studio
-/usr/local/sbin/atd-mikrotik-backup-update > "$STATE/panel-update.log" 2>&1
-rc=$?
-if [[ "$rc" -eq 0 ]]; then status=success; else status=failed; fi
-tmp="$STATE/panel-update.status.tmp"
-printf '{"status":"%s","exit_code":%s,"finished_at":"%s"}\n' "$status" "$rc" "$(date -u +%FT%TZ)" > "$tmp"
-chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
-chown root:atdbackup "$STATE/panel-update.log"; chmod 0640 "$STATE/panel-update.log"
-exit "$rc"
-ATD_WORKER
-  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
-  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
-  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update <<'ATD_LAUNCHER'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-[[ "$#" -eq 0 ]] || { echo 'Arguments are not accepted.' >&2; exit 2; }
-STATE=/var/lib/atd-mikrotik-backup-studio
-if systemctl is-active --quiet atd-mikrotik-backup-panel-update.service; then
-  echo 'An update is already running.' >&2; exit 9
-fi
-tmp="$STATE/panel-update.status.tmp"
-printf '{"status":"running","started_at":"%s"}\n' "$(date -u +%FT%TZ)" > "$tmp"
-chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
-if ! /usr/bin/systemd-run --unit=atd-mikrotik-backup-panel-update --collect --no-block /usr/local/sbin/atd-mikrotik-backup-panel-update-worker; then
-  tmp="$STATE/panel-update.status.tmp"
-  printf '{"status":"failed","exit_code":1,"message":"Could not start updater."}\n' > "$tmp"
-  chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
-  exit 1
-fi
-ATD_LAUNCHER
-  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update
-  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update
-  SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-update.XXXXXX)
-  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-panel-update' > "$SUDOERS_TMP"
-  chmod 0440 "$SUDOERS_TMP"
-  if visudo -cf "$SUDOERS_TMP" >/dev/null; then
-    install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/atd-mikrotik-backup-panel-update
-    rm -f "$SUDOERS_TMP"
-    echo 'Panel-triggered updater installed with a restricted sudo rule.'
-  else
-    rm -f "$SUDOERS_TMP"
-    echo 'Warning: panel updater sudo rule failed validation; terminal updates remain available.' >&2
-  fi
-else
-  echo 'Warning: sudo, visudo, or systemd-run is unavailable; panel-triggered updates are disabled.' >&2
-fi
+# Panel updates are terminal-only; do not create background Worker launchers.
 
 # The updater was bootstrapped to the immutable source snapshot before migration.
 
@@ -359,6 +263,8 @@ mv -f "$STATE/installed-source-commit.tmp" "$STATE/installed-source-commit"
 # Verify the exact postconditions that the panel's update and timezone checks read.
 [[ -s "$STATE/installed-source-commit" ]] || { echo 'Installed source commit marker was not written; update aborted.' >&2; exit 7; }
 [[ "$(cat "$STATE/installed-source-commit")" == "$COMMIT" ]] || { echo 'Installed source commit marker does not match this update; update aborted.' >&2; exit 7; }
+[[ -x /usr/local/sbin/atd-mikrotik-backup-cron ]] || { echo 'Installed Cron helper is missing; update aborted.' >&2; exit 7; }
+[[ -f /etc/cron.d/atd-mikrotik-backup-apply && -f /etc/cron.d/atd-mikrotik-backup-telegram ]] || { echo 'Installed ATD Cron entries are incomplete; update aborted.' >&2; exit 7; }
 [[ -x /usr/local/sbin/atd-mikrotik-backup-set-timezone ]] || { echo 'Installed time-zone helper is missing; update aborted.' >&2; exit 7; }
 [[ -f /etc/sudoers.d/atd-panel-timezone ]] || { echo 'Installed time-zone sudo rule is missing; update aborted.' >&2; exit 7; }
 visudo -cf /etc/sudoers.d/atd-panel-timezone >/dev/null || { echo 'Installed time-zone sudo rule is invalid; update aborted.' >&2; exit 7; }

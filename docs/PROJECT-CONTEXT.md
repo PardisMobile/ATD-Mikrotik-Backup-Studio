@@ -4,6 +4,12 @@
 
 These rules are the project's source of truth. Future implementation, refactoring, installer, updater, UI, and documentation changes must preserve them.
 
+### Current authoritative corrections (2026-10-28)
+- The Linux system time zone and ATD Cron schedule time zone are independent settings. Applying a Linux time zone must call `timedatectl` and must not rewrite Cron; Cron uses `_cron_timezone` (or preserves its existing `CRON_TZ` during migration), with UTC as the fresh-install default.
+- AJAX forms must derive their request URL from `form.getAttribute('action')`, never the `form.action` DOM property, because the hidden `name="action"` field shadows that property and yields a 404 path.
+- PHP runs as `atdbackup`; root-owned 0750 helpers and 0440 sudoers files are intentionally not readable/executable directly by PHP. Readiness checks must use `sudo -n -l <fixed-command>` and must not treat `is_readable`/`is_executable` on those protected paths as proof that installation is missing.
+- Updates are terminal-only. Do not create or invoke a panel background Worker. Installers/updaters must preserve all existing systemd unit/timer files and must not disable or remove units.
+
 ### 1. Existing working core
 - The baseline is MikroTik Backup Studio v3 with working RouterOS 7 scheduled backups over SFTP.
 - Preserve the working backup core. Add the server panel and optional server-side Telegram delivery around it; new RouterOS scripts must not depend on Telegram HTTP/relay calls.
@@ -83,7 +89,7 @@ This section preserves requirements and review notes from the 2026-10-26 handoff
 - Display the Linux server's current date/time and detected system time zone.
 - Clearly explain that Linux Cron does not change the RouterOS scheduler; configured schedule times must be aligned by the administrator.
 - Provide the five-option time-zone selector directly below the warning, including Manual with an example.
-- A selected time zone affects Linux host presentation and the ATD Cron schedule through `CRON_TZ`. The current project configuration is one global schedule, not per-router timezone conversion.
+- Linux time-zone selection changes the actual Linux zone only. ATD Cron uses a separate schedule-zone setting through `CRON_TZ`; the current project configuration is one global schedule, not per-router timezone conversion.
 - Improve lightweight CSS animation and visual consistency.
 - Avoid full-page refresh for normal panel actions where safely feasible; preserve POST/CSRF/redirect/session behavior and ensure failures are visible. Do not use a fragile generic AJAX replacement that silently breaks forms or navigation.
 - Show at most 20 backup files per page; retain accurate total counts/status and implement server-side search and pagination. Sorting was requested for review but must not be claimed as implemented unless it exists and works.
@@ -104,20 +110,20 @@ The following changes were attempted directly on `main`; re-fetch them before ac
 - `server-deployment/panel.css`: added styles for the warning, selector, pagination, animations, and responsive layout.
 - `server-deployment/install-standalone.sh` and `server-deployment/update-standalone.sh`: attempted to install a restricted root-owned helper for in-panel updates.
 
-**Do not assume these attempted changes are production-ready. Audit them carefully.** Important potential issues to investigate:
+**Historical audit checklist (2026-10-27; reviewed and superseded by the current authoritative corrections above). Do not treat these former hypotheses as current requirements:**
 1. The Linux panel's time-zone choice may only change Cron's interpretation of saved times; that does not automatically synchronize those times with the RouterOS scheduler.
-2. The panel's time-zone action may require a correctly installed worker/helper to apply Cron changes; verify save/rollback behavior and permissions.
+2. Historical: the time-zone action was previously coupled to Cron; current code applies Linux timezone independently and uses a separate Cron timezone setting.
 3. The generic AJAX code may replace the whole app shell and may not preserve all event handlers, form semantics, pagination/search state, or login/redirect behavior.
 4. Verify the live clock actually advances and represents the server clock accurately.
 5. Confirm the 20-file pagination is server-side and search totals, empty states, stats, and navigation remain correct.
-6. Audit the in-panel updater's sudoers rule, systemd-run invocation, helper ownership/modes, self-update behavior, status JSON, error handling, and whether a real installation actually has all prerequisites.
+6. Historical: the former in-panel/systemd-run updater was removed. Updates are terminal-only; do not add a background Worker.
 7. The updater helper was added to installer/updater scripts in separate edits; verify the current code and generated package do not diverge.
 8. The generator embeds canonical server files. A previous attempt to synchronize large embedded templates caused duplicated/malformed trailing content in the PowerShell file. A later commit truncated the malformed tail, but this must be checked against the original generator's expected end and all CI invariants before trusting it. Do not blindly replace embedded templates again.
 9. Verify the generated PHP config carries the chosen time zone correctly; confirm constant names and default-state logic match across generator, PHP, cron helper, installer, and updater.
 10. The panel's scheduled Telegram logic is frozen: preserve its existing baseline/dedup/retry behavior.
 
 
-### Applied follow-up fix — 2026-10-27
+### Historical follow-up — 2026-10-27 (superseded)
 - `server-deployment/panel.js`: the in-panel `update_start` form now uses the existing AJAX submission path. This allows the UI to detect the `UPDATE_STARTED` flash response and begin polling `?ajax=update_status`; previously the submit handler deliberately let this form use a native navigation, so the status poll never started. Time-zone submission remains native as intended.
 
 
@@ -145,7 +151,7 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 ### Implemented panel enhancements — 2026-10-26
 - Panel sections: Dashboard, Backups, Telegram, and Settings. The UI continues to render server-side; navigation hides/shows grouped sections without changing action endpoints or CSRF handling.
 - A live Linux date/time clock appears in the top bar. The settings card also shows the detected system zone.
-- The timezone selector applies the selected zone to the Linux host only after explicit user submission, using a root-owned helper that accepts no command-line arguments and validates a zone against `/usr/share/zoneinfo`. The same selected zone remains the `CRON_TZ` zone. This does not change the actual system clock, NTP configuration, or RouterOS settings.
+- Historical note (superseded): earlier releases coupled the panel's selected zone to `CRON_TZ`. The current behavior keeps Linux and Cron zones independent. The Linux selector uses a root-owned helper with no command-line arguments and validates against `/usr/share/zoneinfo`; Cron reads `_cron_timezone` and preserves its existing `CRON_TZ` during migration. Neither action changes the system clock, NTP configuration, or RouterOS settings.
 - The panel footer already contains “Code by Amir Taheri” linked to the approved WhatsApp URL; do not duplicate or rewrite it unnecessarily.
 
 - Backup listing supports server-side sort by filename (ascending), file size (descending), and modification time (newest first). Sort selection is preserved across pagination and search.
@@ -178,11 +184,11 @@ These are static/CI checks only. They do not prove a live Ubuntu upgrade, Router
 - Source-level rollback coverage is not equivalent to a failure-injection test on a disposable Ubuntu host. Do not claim rollback has been exercised unless that test is actually run.
 
 
-### Updater and generated-asset remediation — 2026-10-27
+### Updater and generated-asset remediation — 2026-10-27 (historical; unit migration was later removed)
 - Reviewed the updater, installer, Cron helper, timezone helper, PHP panel, JavaScript, and generated Windows bootstrap as a connected update path.
-- The old systemd scanner/worker/timer units are obsolete because Telegram scanning moved to the ATD-owned Cron schedule. The updater now performs that migration **after all replacement assets are downloaded and validated**: records each legacy unit's active/enabled state, snapshots the unit definitions, then disables/stops and removes only the known ATD legacy units. If a later update step fails, rollback restores their files and prior active/enabled state. This is intentional migration cleanup, not ordinary stopping of the current app services.
-- The updater now serializes runs with a lock; snapshots the versioned app assets, Cron/helper files, timezone and panel updater helpers, sudoers entries, updater executable, installed-source marker, and legacy unit definitions; stops the ATD PHP backend/TLS listener during live asset replacement; and restores prior app service active/enabled state after successful activation or rollback.
-- The updater's rollback trap covers later Cron/helper/sudoers/update steps; installed-source marker and success output are committed only after updater self-refresh validates and installs. The panel updater helper is refreshed on update rather than only created when missing.
+- The old implementation attempted to disable/remove legacy systemd units. Current installer/updater preserve every existing unit and timer; no migration cleanup is performed.
+- The updater serializes runs with a lock; snapshots versioned app assets and the ATD-owned helper/configuration paths it replaces; stops only the ATD PHP backend/TLS listener during live asset replacement; and restores prior ATD service active/enabled state after successful activation or rollback.
+- The updater's rollback trap covers later Cron/helper/sudoers/update steps; installed-source marker and success output are committed only after updater self-refresh validates and installs. Existing panel-triggered updater files, if any, are left untouched and are not used.
 - Installer and updater now install the cron package only when the relevant service unit is absent, rather than reinstalling it just because the daemon is inactive.
 - Corrected the generated PowerShell bootstrap's embedded PHP and JavaScript templates to match canonical server assets. This restores the AJAX Telegram Test contract (panel.js / send-backup.php): no page reload, JSON response handling. Telegram send behavior and RouterOS/SFTP code were not changed.
 - CI at the last verification point: Installer checks succeeded; PowerShell parse and shell syntax checks succeeded. Source checks were still running. The GitHub source-check workflow had earlier exposed the generated PHP/JS mismatch; the canonical templates were synchronized afterward.

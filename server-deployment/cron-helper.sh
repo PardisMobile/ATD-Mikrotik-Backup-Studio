@@ -26,13 +26,16 @@ $times = is_array($saved) && isset($saved["backup_times"]) && is_array($saved["b
 $delay = is_array($saved) && isset($saved["delay_minutes"])
     ? (int)$saved["delay_minutes"]
     : (defined("TELEGRAM_DELAY_MINUTES") ? (int)TELEGRAM_DELAY_MINUTES : 2);
-$configZone = defined("DEFAULT_TIMEZONE") ? trim((string)DEFAULT_TIMEZONE) : "UTC";
-try { new DateTimeZone($configZone); } catch (Throwable $e) {
-    fwrite(STDERR, "Invalid DEFAULT_TIMEZONE in config.php.\n");
+$zone = trim((string)($state["_cron_timezone"] ?? ""));
+if ($zone === "") {
+    $current = @file_get_contents("/etc/cron.d/atd-mikrotik-backup-telegram");
+    if (is_string($current) && preg_match("/^CRON_TZ=([^\\r\\n]+)$/m", $current, $match)) $zone = trim($match[1]);
+}
+if ($zone === "") $zone = defined("DEFAULT_CRON_TIMEZONE") ? trim((string)DEFAULT_CRON_TIMEZONE) : "UTC";
+try { new DateTimeZone($zone); } catch (Throwable $e) {
+    fwrite(STDERR, "Invalid independent Cron time zone.\n");
     exit(7);
 }
-$zone = (string)($state["_timezone"] ?? $configZone);
-try { new DateTimeZone($zone); } catch (Throwable $e) { $zone = $configZone; }
 echo implode(",", array_map(static fn($t) => substr((string)$t, 0, 5), $times)), "\n", $delay, "\n", $zone, "\n";
 ')" || { echo "Could not read saved delivery schedule." >&2; exit 5; }
 

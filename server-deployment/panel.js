@@ -16,10 +16,11 @@
   }
   const savedAccent=safeGet('atd-accent');if(savedAccent)setAccent(savedAccent);else syncAccentSwatches();
   function initTimezoneSelector(){
-    const zoneSelect=document.querySelector('select[name="timezone"]');
-    if(!zoneSelect)return;
-    const form=zoneSelect.closest('form'),manual=form&&form.querySelector('[name="timezone_manual"]');
-    if(manual){manual.hidden=zoneSelect.value!=='Manual';manual.required=zoneSelect.value==='Manual';}
+    document.querySelectorAll('select[name="timezone"],select[name="cron_timezone"]').forEach(zoneSelect=>{
+      const manualName=zoneSelect.name==='cron_timezone'?'cron_timezone_manual':'timezone_manual';
+      const form=zoneSelect.closest('form'),manual=form&&form.querySelector('[name="'+manualName+'"]');
+      if(manual){manual.hidden=zoneSelect.value!=='Manual';manual.required=zoneSelect.value==='Manual';}
+    });
   }
   let messageTimer=null;
   function dismissMessage(box){
@@ -61,11 +62,13 @@
     syncAccentSwatches();
   }
   async function submitAjax(form){
-    const isUpdateForm=form.classList.contains('update-form');
     const submitters=form.querySelectorAll('button[type="submit"],button:not([type])');
     submitters.forEach(b=>{b.dataset.oldText=b.innerHTML;b.disabled=true;b.classList.add('is-loading')});
     try{
-      const response=await fetch(form.action||location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
+      // Do not read form.action: a hidden <input name="action"> shadows that
+      // DOM property and turns the request URL into /[object HTMLInputElement].
+      const actionUrl=form.getAttribute('action');
+      const response=await fetch(actionUrl?new URL(actionUrl,location.href).href:location.href,{method:'POST',body:new FormData(form),credentials:'same-origin',redirect:'follow',headers:{'X-Requested-With':'XMLHttpRequest'}});
       if(!response.ok)throw new Error('Request failed ('+response.status+')');
       const action=form.querySelector('[name="action"]')?.value;
       if(action==='telegram_test'||action==='update_start'||action==='timezone'){
@@ -73,12 +76,10 @@
         let data;
         try{data=JSON.parse(body)}catch(e){throw new Error(body.trim().slice(0,500)||'The server returned an invalid response.')}
         showMessage(data.message||(action==='telegram_test'?'Telegram test finished.':action==='timezone'?'Time zone request finished.':'Update request finished.'),!!data.ok);
-        if(action==='update_start'&&data.ok)pollUpdateStatus();
         if(action==='timezone'&&data.ok){setTimeout(()=>location.reload(),700);}
         return;
       }
       const html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html');
-      const updateStarted=false;
       const fresh=parsed.querySelector('.app-shell'),current=document.querySelector('.app-shell');
       if(!fresh||!current)throw new Error('Unexpected response from panel.');
       current.replaceWith(fresh);
@@ -90,7 +91,6 @@
       initTimezoneSelector();
       syncAccentSwatches();
       clearStaleAlerts();
-      if(updateStarted)pollUpdateStatus();
     }catch(error){showMessage('Operation failed: '+error.message,false)}
     finally{submitters.forEach(b=>{b.disabled=false;b.classList.remove('is-loading')})}
   }
@@ -105,24 +105,6 @@
     if(!['dashboard','backups','telegram','settings'].includes(name))return;
     try{localStorage.setItem('atd-panel-section',name)}catch(e){}
     applyPanelSection();
-  }
-  async function pollUpdateStatus(){
-    const target=document.getElementById('updateStatus');if(!target)return;
-    target.textContent='Update requested. Waiting for the updater…';
-    for(let i=0;i<180;i++){
-      try{
-        const r=await fetch(location.pathname+'?ajax=update_status',{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});
-        if(r.ok){
-          const data=await r.json();
-          if(data.status==='running'){target.textContent='Update is running. Keep this page open…';}
-          else if(data.status==='success'){target.textContent='Update completed successfully.';return;}
-          else if(data.status==='failed'){target.textContent='Update failed (exit code '+String(data.exit_code??'unknown')+'). Check the server updater log.';return;}
-          else if(data.status==='unavailable'){target.textContent=data.message||'Updater status is unavailable.';return;}
-        }
-      }catch(e){}
-      await new Promise(resolve=>setTimeout(resolve,2000));
-    }
-    target.textContent='Update status is taking longer than expected. Check again in a moment.';
   }
   function renderClock(el){
     const epoch=parseInt(el.dataset.epoch||'0',10);if(!epoch)return;
@@ -190,8 +172,9 @@
     },300);
   });
   document.addEventListener('change',function(event){
-    const select=event.target.closest('select[name="timezone"]');if(!select)return;
-    const form=select.closest('form'),manual=form&&form.querySelector('[name="timezone_manual"]');
+    const select=event.target.closest('select[name="timezone"],select[name="cron_timezone"]');if(!select)return;
+    const manualName=select.name==='cron_timezone'?'cron_timezone_manual':'timezone_manual';
+    const form=select.closest('form'),manual=form&&form.querySelector('[name="'+manualName+'"]');
     if(manual){manual.hidden=select.value!=='Manual';manual.required=select.value==='Manual';}
   });
   initTimezoneSelector();

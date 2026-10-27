@@ -2,7 +2,7 @@
 
 ## First-run configuration and bootstrap
 
-The Windows generator collects the SFTP destination, first-run panel credentials, backup directory and schedule, public panel port, maximum accepted file size, and default Linux/Cron time zone. Telegram credentials are configured later in the authenticated panel. The generated `install.sh` contains a base64-encoded private configuration payload; base64 is encoding, not encryption, so keep the package private.
+The Windows generator collects the SFTP destination, first-run panel credentials, backup directory and schedule, public panel port, maximum accepted file size, and default Linux time zone. Cron defaults independently to UTC and can be configured separately in the panel. Telegram credentials are configured later in the authenticated panel. The generated `install.sh` contains a base64-encoded private configuration payload; base64 is encoding, not encryption, so keep the package private.
 
 The bootstrap resolves the current `main` commit once, then downloads the versioned server assets from that immutable commit. It downloads `send-backup.php`, `panel.css`, `panel.js`, `cron-helper.sh`, and `install-standalone.sh` before invoking the runtime installer with the same pinned commit. It does not embed the application assets in the customer package. The installer stores private configuration at `/etc/atd-mikrotik-backup-studio/config.php`, serves versioned app code from `/opt/atd-mikrotik-backup-studio`, and keeps mutable state and sessions under `/var/lib/atd-mikrotik-backup-studio`.
 
@@ -16,22 +16,20 @@ sudo atd-mikrotik-backup-update
 
 The installed updater first fetches and syntax-checks the latest updater, atomically replaces its own executable, and re-executes it while passing the exact source commit SHA. This pins the updater and all subsequently downloaded assets to one immutable snapshot. It then locks against concurrent runs, downloads the PHP, CSS, JavaScript, Cron helper, and Linux timezone helper to a temporary staging directory, and validates syntax and expected PHP interfaces before touching live application files.
 
-Before activation, the updater stores a timestamped snapshot under `/var/lib/atd-mikrotik-backup-studio`. The transaction covers the versioned app assets, ATD-owned helpers, Cron entries, updater entry points, sudo policy files, installed-source marker, legacy ATD scanner unit definitions/states, and the active/enabled states of the ATD PHP/TLS services. It replaces these ATD-owned paths, reapplies the ATD schedule from saved settings, and restarts only the ATD PHP and TLS services that were active before the update. The shared host Cron service is only checked as a precondition and is never modified. It writes the new installed-source marker and prints success only after required postconditions pass. On a transaction error, its rollback restores the captured files and ATD service states and verifies that host Cron stayed active and enabled.
+Before activation, the updater stores a timestamped snapshot under `/var/lib/atd-mikrotik-backup-studio`. The transaction covers the versioned app assets, ATD-owned Cron/timezone helpers and Cron entries, updater executable, timezone sudo policy, and installed-source marker. It does not create a panel Worker, change existing systemd unit files, or disable/remove existing units. It restarts only the ATD PHP and TLS services that were active before the update. The shared host Cron service is only checked as a precondition and is never modified. It writes the new installed-source marker and prints success only after required postconditions pass. On a transaction error, its rollback restores the captured files and ATD service states and verifies that host Cron stayed active and enabled.
 
 The update may touch these ATD-owned paths:
 
 - `/opt/atd-mikrotik-backup-studio/{send-backup.php,panel.css,panel.js}`
-- `/usr/local/sbin/atd-mikrotik-backup-{update,cron,set-timezone,panel-update,panel-update-worker}`
+- `/usr/local/sbin/atd-mikrotik-backup-{update,cron,set-timezone}`
 - `/etc/cron.d/atd-mikrotik-backup-{apply,telegram}`
-- `/etc/sudoers.d/atd-mikrotik-backup-panel-update` and `/etc/sudoers.d/atd-panel-timezone`
+- `/etc/sudoers.d/atd-panel-timezone`
 - `/var/lib/atd-mikrotik-backup-studio/installed-source-commit` and the updater's timestamped snapshot
-- Only the explicitly named legacy ATD scanner/worker unit files, when present
+- Existing systemd unit and timer files are not in the update write set.
 
-The rollback snapshot records each path using the same exact pathname the installer/updater writes. A source-check invariant covers the panel updater sudoers path so a typo cannot cause rollback to miss the existing rule.
+It does not replace the private configuration, Telegram delivery state, uploaded backup files, TLS certificate/key, or assigned ports. It does not modify RouterOS scripts, third-party web-server configuration, firewall rules, or any systemd unit. It requires an existing host Cron daemon to be active and enabled; otherwise it aborts with `HOST_CRON_NOT_READY`. It manages only the project's own `/etc/cron.d` entries and does not install, enable, start, stop, or repair the shared daemon.
 
-It does not replace the private configuration, Telegram delivery state, uploaded backup files, TLS certificate/key, or assigned ports. It does not modify RouterOS scripts, third-party web-server configuration, firewall rules, or unrelated service definitions. It requires an existing host Cron daemon to be active and enabled; otherwise it aborts with `HOST_CRON_NOT_READY`. It manages only the project's own `/etc/cron.d` entries and does not install, enable, start, stop, or repair the shared daemon. The current production host's Cron daemon was observed active and enabled on 2026-10-28.
-
-The panel-triggered updater is a separate path: it calls a narrowly scoped root launcher which starts a transient ATD systemd update unit. Do not use that path when a policy or test explicitly prohibits background updater workers; the terminal command does not invoke the panel launcher.
+Panel updates are terminal-only. The UI reports the installed commit and directs administrators to run `sudo atd-mikrotik-backup-update`; it does not invoke systemd-run or create a background Worker.
 
 ## Verification boundaries
 

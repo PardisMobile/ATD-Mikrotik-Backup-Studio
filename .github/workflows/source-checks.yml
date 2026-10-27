@@ -109,23 +109,23 @@ jobs:
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
           snapshot = next((line for line in updater.splitlines() if line.startswith("for path in /usr/local/sbin/atd-mikrotik-backup-cron ")), "")
-          panel_sudoers = "/etc/sudoers.d/atd-mikrotik-backup-panel-update"
-          if panel_sudoers not in snapshot or "/etc/sudoers.d/atd-panel-update " in snapshot:
-              raise SystemExit("Updater rollback snapshot must include the exact in-panel updater sudoers path")
+          timezone_sudoers = "/etc/sudoers.d/atd-panel-timezone"
+          if timezone_sudoers not in snapshot:
+              raise SystemExit("Updater rollback snapshot must include the exact Linux-timezone sudoers path")
           if "HOST_CRON_NOT_READY" not in runtime or "HOST_CRON_NOT_READY" not in updater:
               raise SystemExit("Installer and updater must require a pre-existing active and enabled host Cron service")
           for path, script in (("installer", runtime), ("updater", updater)):
               forbidden = ("systemctl enable --now cron.service", "systemctl enable --now crond.service", "apt-get install -y cron", "dnf install -y cronie", "yum install -y cronie")
               if any(command in script for command in forbidden):
                   raise SystemExit(f"{path} must not install, enable, or start the shared host Cron daemon")
-          if panel_sudoers not in runtime:
-              raise SystemExit("Installer and updater must use the same in-panel updater sudoers path")
+          if timezone_sudoers not in runtime:
+              raise SystemExit("Installer and updater must use the same Linux-timezone sudoers path")
           if 'raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment' in updater:
               raise SystemExit("Updater must fetch assets from one immutable commit snapshot")
           if "api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main" not in updater:
               raise SystemExit("Updater must resolve the immutable source commit before staging assets")
-          if "Do not disable legacy services or touch live files until all replacement assets validate." not in updater:
-              raise SystemExit("Updater must stage and validate before modifying live services")
+          if "No existing systemd service or timer is migrated, disabled, removed, or rewritten." not in updater:
+              raise SystemExit("Updater must preserve existing systemd services and timers")
           if "ATD_SOURCE_COMMIT" not in runtime or "SOURCE_COMMIT" not in runtime:
               raise SystemExit("Runtime installer must use the bootstrap's pinned source commit for updater download")
           if 'BACKUP_DIR=$(sed -n "s/^const BACKUP_DIR' not in runtime or ' "$TLS/config.php"' not in runtime:
@@ -139,8 +139,20 @@ jobs:
                   raise SystemExit("Installer/updater must install the root-owned schedule-apply Cron worker")
               if 'rm -f "$STATE/telegram-scan-started-at"' in script:
                   raise SystemExit("Installer/updater must preserve the Telegram scan baseline")
-          if "systemctl disable --now" not in runtime or "systemctl disable --now" not in updater:
-              raise SystemExit("Installer and updater must remove obsolete ATD-only worker/timer units")
+          for script in (runtime, updater):
+              if "systemctl disable --now" in script or 'rm -f "/etc/systemd/system/' in script or "systemd-run" in script or "panel-update-worker" in script:
+                  raise SystemExit("Installer/updater must not remove units or create a panel background Worker")
+          js = Path("server-deployment/panel.js").read_text(encoding="utf-8")
+          if "form.action||location.href" in js or "form.getAttribute('action')" not in js:
+              raise SystemExit("AJAX form URLs must not use the shadowable form.action DOM property")
+          if "sudo_command_allowed($timezoneHelper)" not in php or "sudo -n -l " not in php:
+              raise SystemExit("Privileged helper readiness must be checked via the caller's sudo policy")
+          cron_helper = Path("server-deployment/cron-helper.sh").read_text(encoding="utf-8")
+          timezone_helper = Path("server-deployment/set-system-timezone.sh").read_text(encoding="utf-8")
+          if 'state["_cron_timezone"]' not in cron_helper or 'state["_timezone"]' in cron_helper:
+              raise SystemExit("Cron time zone must be stored independently from the Linux panel time zone")
+          if "atd-mikrotik-backup-cron" in timezone_helper or "--apply" in timezone_helper:
+              raise SystemExit("Changing Linux time zone must not rewrite the independent Cron schedule")
           config_start = source.index("$configPhp = @\"")
           config_end = source.index("\n\"@", config_start)
           generated_config = source[config_start:config_end]
@@ -148,6 +160,8 @@ jobs:
               raise SystemExit("Generated private config must persist the Windows-selected backup times")
           if "const TELEGRAM_DELAY_MINUTES = 2;" not in generated_config:
               raise SystemExit("Generated private config must define the default Telegram delay")
+          if "const DEFAULT_CRON_TIMEZONE = 'UTC';" not in generated_config:
+              raise SystemExit("New installs must default Cron time zone independently to UTC")
           if "TRIGGER_TOKEN" in generated_config or "RELAY_TOKEN" in generated_config:
               raise SystemExit("New private configs must not depend on RouterOS callback tokens")
           if "const TELEGRAM_BOT_TOKEN = '';" not in generated_config or "const TELEGRAM_CHAT_ID = '';" not in generated_config:

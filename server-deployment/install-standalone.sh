@@ -64,14 +64,7 @@ mkdir -p "$APP" "$STATE/sessions" "$TLS"
 chmod 0750 "$APP"
 chmod 0700 "$STATE" "$STATE/sessions"
 chown -R atdbackup:atdbackup "$STATE"
-# Remove legacy automatic scanners/workers from older installations.
-LEGACY_UNITS=(
-  atd-mikrotik-backup-telegram-scan.service atd-mikrotik-backup-telegram-scan.timer
-  atd-mikrotik-backup-telegram-worker.service atd-mikrotik-backup-telegram-worker.timer
-  atd-mikrotik-backup-worker.service atd-mikrotik-backup-worker.timer
-  atd-mikrotik-backup-scanner.service atd-mikrotik-backup-scanner.timer
-)
-for unit in "${LEGACY_UNITS[@]}"; do systemctl disable --now "$unit" 2>/dev/null || true; rm -f "/etc/systemd/system/$unit"; done
+# Preserve all existing service definitions; the installer never removes or disables units.
 # Preserve delivery baseline and state across re-installs.
 chown root:atdbackup "$TLS"
 chmod 0750 "$TLS"
@@ -253,53 +246,7 @@ chmod 0640 "$STATE/installed-source-commit.tmp"
 mv -f "$STATE/installed-source-commit.tmp" "$STATE/installed-source-commit"
 
 
-# Install a narrowly-scoped root launcher so the panel can start only the fixed ATD updater.
-if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1 && command -v systemd-run >/dev/null 2>&1; then
-  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update-worker <<'ATD_WORKER'
-#!/usr/bin/env bash
-set +e
-STATE=/var/lib/atd-mikrotik-backup-studio
-/usr/local/sbin/atd-mikrotik-backup-update > "$STATE/panel-update.log" 2>&1
-rc=$?
-if [[ "$rc" -eq 0 ]]; then status=success; else status=failed; fi
-tmp="$STATE/panel-update.status.tmp"
-printf '{"status":"%s","exit_code":%s,"finished_at":"%s"}\n' "$status" "$rc" "$(date -u +%FT%TZ)" > "$tmp"
-chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
-chown root:atdbackup "$STATE/panel-update.log"; chmod 0640 "$STATE/panel-update.log"
-exit "$rc"
-ATD_WORKER
-  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
-  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update-worker
-  cat > /usr/local/sbin/atd-mikrotik-backup-panel-update <<'ATD_LAUNCHER'
-#!/usr/bin/env bash
-set -Eeuo pipefail
-[[ "$#" -eq 0 ]] || { echo 'Arguments are not accepted.' >&2; exit 2; }
-STATE=/var/lib/atd-mikrotik-backup-studio
-if systemctl is-active --quiet atd-mikrotik-backup-panel-update.service; then echo 'An update is already running.' >&2; exit 9; fi
-tmp="$STATE/panel-update.status.tmp"
-printf '{"status":"running","started_at":"%s"}\n' "$(date -u +%FT%TZ)" > "$tmp"
-chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
-if ! /usr/bin/systemd-run --unit=atd-mikrotik-backup-panel-update --collect --no-block /usr/local/sbin/atd-mikrotik-backup-panel-update-worker; then
-  tmp="$STATE/panel-update.status.tmp"
-  printf '{"status":"failed","exit_code":1,"message":"Could not start updater."}\n' > "$tmp"
-  chown root:atdbackup "$tmp"; chmod 0640 "$tmp"; mv -f "$tmp" "$STATE/panel-update.status"
-  exit 1
-fi
-ATD_LAUNCHER
-  chown root:root /usr/local/sbin/atd-mikrotik-backup-panel-update
-  chmod 0750 /usr/local/sbin/atd-mikrotik-backup-panel-update
-  SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-update.XXXXXX)
-  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-panel-update' > "$SUDOERS_TMP"
-  chmod 0440 "$SUDOERS_TMP"
-  if visudo -cf "$SUDOERS_TMP" >/dev/null; then
-    install -o root -g root -m 0440 "$SUDOERS_TMP" /etc/sudoers.d/atd-mikrotik-backup-panel-update
-    rm -f "$SUDOERS_TMP"
-  else
-    rm -f "$SUDOERS_TMP"
-    echo 'Warning: panel updater sudo rule failed validation; terminal updates remain available.' >&2
-  fi
-fi
-
+# Panel updates are terminal-only; do not create background Worker launchers.
 # On an existing installation, run the validated updater now so legacy worker code is removed too.
 if [[ "$EXISTING_INSTALL" == "1" ]]; then
   /usr/local/sbin/atd-mikrotik-backup-update

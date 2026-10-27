@@ -30,11 +30,4 @@ if [[ "$actual_path" != "$zone_path" ]]; then
   echo "Could not verify the applied system time zone; restored the previous zone." >&2
   exit 7
 fi
-# The Cron helper writes CRON_TZ from the saved panel state. Reapply it now,
-# rather than waiting for a later schedule save or leaving the old zone active.
-if [[ ! -x /usr/local/sbin/atd-mikrotik-backup-cron ]] || ! /usr/local/sbin/atd-mikrotik-backup-cron --apply; then
-  restore_previous_zone
-  echo "Could not apply the saved Cron schedule; restored the previous system time zone." >&2
-  exit 8
-fi
-printf 'Linux system and ATD Cron time zones set to %s. The system clock itself was not manually changed.\n' "$zone"
+printf 'Linux system time zone set to %s. ATD Cron time zone is managed independently. The system clock itself was not manually changed.\n' "$zone"

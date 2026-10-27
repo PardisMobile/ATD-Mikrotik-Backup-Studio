@@ -310,6 +310,7 @@ const PUBLIC_PORT = $publicPort;
 const BACKUP_SCHEDULE_TIMES = [$schedulePhp];
 const TELEGRAM_DELAY_MINUTES = 2;
 const DEFAULT_TIMEZONE = '$timeZoneName';
+const DEFAULT_CRON_TIMEZONE = 'UTC';
 "@
     $panelHostPhp = $sftpHost.Replace('\', '\\').Replace("'", "\'")
     $configPhp = $configPhp.Replace("const PUBLIC_PORT = $publicPort;", "const PUBLIC_PORT = $publicPort; const PANEL_HOSTNAME = '$panelHostPhp';")
