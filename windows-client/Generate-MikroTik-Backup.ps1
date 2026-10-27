@@ -419,8 +419,14 @@ function normalize_backup_times(string $input): ?array {
     return $times;
 }
 function selected_timezone(): string {
-    $state = load_state(); $zone = (string)($state['_timezone'] ?? (defined('DEFAULT_TIMEZONE') ? DEFAULT_TIMEZONE : 'UTC'));
-    try { new DateTimeZone($zone); return $zone; } catch (Throwable $e) { return 'UTC'; }
+    $configZone = defined('DEFAULT_TIMEZONE') ? trim((string)DEFAULT_TIMEZONE) : 'UTC';
+    try { new DateTimeZone($configZone); } catch (Throwable $e) {
+        // A broken first-run configuration is not silently disguised as UTC.
+        return $configZone;
+    }
+    $state = load_state();
+    $zone = (string)($state['_timezone'] ?? $configZone);
+    try { new DateTimeZone($zone); return $zone; } catch (Throwable $e) { return $configZone; }
 }
 function detected_system_timezone(): string {
     // Prefer the active /etc/localtime link because timedatectl changes it at runtime.
