@@ -88,7 +88,7 @@ After that, use `sudo atd-mikrotik-backup-update` normally.
 ### Current implementation snapshot (2026-10-25)
 - Current reviewed `main` head before this context update: `c7724376a5a2e4fde77268acb9250ce1755e9de4`.
 - Windows PowerShell generator: `windows-client/Generate-MikroTik-Backup.ps1`.
-- Canonical server panel: `server-deployment/send-backup.php`, `panel.css`, `panel.js`, and `cron-helper.sh`. The generator embeds these assets; CI checks byte-for-byte synchronization (ignoring trailing line endings).
+- Canonical server panel assets: `server-deployment/send-backup.php`, `panel.css`, `panel.js`, and `cron-helper.sh`. The generated `install.sh` contains private setup configuration only; installation fetches versioned server assets from GitHub at an immutable commit.
 - Telegram credentials are configured through the authenticated web panel, not prompted for by the Windows generator. The single Telegram connection test sends the newest existing backup file; it is not a text-only test.
 - RouterOS continues to create and upload backups through SFTP; RouterOS does not call Telegram or the PHP panel.
 - Router backup schedule is selected in the generator and saved in private config. The panel manages Linux-side Telegram delivery schedule and delay through a root-owned Cron apply worker.
@@ -112,7 +112,7 @@ After that, use `sudo atd-mikrotik-backup-update` normally.
 3. Work directly on `main`; commit changes directly to `main`, one coherent fix at a time.
 4. Check embedded PHP/CSS/JS/Cron helper against canonical files after any relevant change.
 5. Run or inspect actual CI and report exact evidence; never infer a pass from missing status checks.
-6. Inspect unique commits and file diffs on both extra branches, reconcile useful work to `main`, and only then remove obsolete branches if repository permissions allow.
+6. Keep all future changes on `main`. If legacy branches remain, inspect their unique work before deciding whether they can safely be deleted; do not create new branches.
 
 ### Update check
 Open Settings and choose **Check for updates**. The panel compares the latest GitHub main commit with the installed source commit recorded by the installer/updater. A missing installed-version marker is reported as unknown and recommends one migration/update run. The check is read-only; installation still requires pressing the update button. GitHub connectivity is required.
