@@ -145,6 +145,51 @@ rollback(){
     if (( CRON_WAS_ENABLED )); then systemctl enable "$CRON_UNIT" 2>/dev/null || true; else systemctl disable "$CRON_UNIT" 2>/dev/null || true; fi
     if (( CRON_WAS_ACTIVE )); then systemctl start "$CRON_UNIT" 2>/dev/null || true; else systemctl stop "$CRON_UNIT" 2>/dev/null || true; fi
   fi
+  # Verify restoration rather than silently treating best-effort commands as success.
+  local rollback_failed=0
+  for f in send-backup.php panel.css panel.js; do
+    if [[ -f "$BACKUP/$f" ]]; then
+      cmp -s -- "$BACKUP/$f" "$APP/$f" || { echo "Rollback verification failed: $APP/$f" >&2; rollback_failed=1; }
+    elif [[ -e "$APP/$f" ]]; then
+      echo "Rollback verification failed: unexpected file $APP/$f" >&2
+      rollback_failed=1
+    fi
+  done
+  if [[ -s "$BACKUP/snapshots.list" ]]; then
+    while IFS= read -r path; do
+      if [[ "$path" == MISSING:* ]]; then
+        [[ ! -e "${path#MISSING:}" ]] || { echo "Rollback verification failed: unexpected path ${path#MISSING:}" >&2; rollback_failed=1; }
+      else
+        rel="${path#/}"
+        if [[ ! -e "$BACKUP/$rel" ]] || ! cmp -s -- "$BACKUP/$rel" "$path"; then
+          echo "Rollback verification failed: $path" >&2
+          rollback_failed=1
+        fi
+      fi
+    done < "$BACKUP/snapshots.list"
+  fi
+  if [[ -n "$CRON_UNIT" ]]; then
+    current_active=0; current_enabled=0
+    systemctl is-active --quiet "$CRON_UNIT" && current_active=1 || true
+    systemctl is-enabled --quiet "$CRON_UNIT" && current_enabled=1 || true
+    (( current_active == CRON_WAS_ACTIVE && current_enabled == CRON_WAS_ENABLED )) || { echo "Rollback verification failed: $CRON_UNIT state was not restored." >&2; rollback_failed=1; }
+  fi
+  if [[ -s "$BACKUP/legacy-unit-states" ]]; then
+    while read -r unit active enabled; do
+      current_active=0; current_enabled=0
+      systemctl is-active --quiet "$unit" 2>/dev/null && current_active=1 || true
+      systemctl is-enabled --quiet "$unit" 2>/dev/null && current_enabled=1 || true
+      if (( current_active != active || current_enabled != enabled )); then
+        echo "Rollback verification failed: legacy unit $unit state was not restored." >&2
+        rollback_failed=1
+      fi
+    done < "$BACKUP/legacy-unit-states"
+  fi
+  if (( rollback_failed )); then
+    echo "CRITICAL: rollback was incomplete. Review the pre-update snapshot at $BACKUP and systemd state before retrying." >&2
+  else
+    echo "Rollback verification passed: saved files and captured service states were restored." >&2
+  fi
   UPDATE_TRANSACTION=0
 }
 trap 'if (( UPDATE_TRANSACTION )); then rollback; fi' ERR
