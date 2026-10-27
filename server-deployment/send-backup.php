@@ -314,7 +314,7 @@ function render_panel(): void {
                 } else $_SESSION['flash']=['ok'=>true,'message'=>'DELIVERY_SCHEDULE_SAVED (Cron applies within one minute)'];
             }
         }
-        if (in_array($action,['telegram_test','update_start'],true) && strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH']??''))==='xmlhttprequest') {
+        if (in_array($action,['telegram_test','update_start','timezone'],true) && strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH']??''))==='xmlhttprequest') {
             $flash=$_SESSION['flash']??['ok'=>false,'message'=>($action==='update_start'?'UPDATE_START_FAILED':'TELEGRAM_TEST_FAILED')];
             unset($_SESSION['flash']);
             header('Content-Type: application/json; charset=utf-8');
