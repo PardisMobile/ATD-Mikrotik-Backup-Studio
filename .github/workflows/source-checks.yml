@@ -108,6 +108,12 @@ jobs:
               raise SystemExit("Do not add a text-only test or per-file send buttons")
           runtime = Path("server-deployment/install-standalone.sh").read_text(encoding="utf-8")
           updater = Path("server-deployment/update-standalone.sh").read_text(encoding="utf-8")
+          snapshot = next((line for line in updater.splitlines() if line.startswith("for path in /usr/local/sbin/atd-mikrotik-backup-cron ")), "")
+          panel_sudoers = "/etc/sudoers.d/atd-mikrotik-backup-panel-update"
+          if panel_sudoers not in snapshot or "/etc/sudoers.d/atd-panel-update " in snapshot:
+              raise SystemExit("Updater rollback snapshot must include the exact in-panel updater sudoers path")
+          if panel_sudoers not in runtime:
+              raise SystemExit("Installer and updater must use the same in-panel updater sudoers path")
           if 'raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/main/server-deployment' in updater:
               raise SystemExit("Updater must fetch assets from one immutable commit snapshot")
           if "api.github.com/repos/PardisMobile/ATD-Mikrotik-Backup-Studio/commits/main" not in updater:

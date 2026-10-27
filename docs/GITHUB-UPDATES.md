@@ -27,6 +27,8 @@ The update may touch these ATD-owned paths:
 - `/var/lib/atd-mikrotik-backup-studio/installed-source-commit` and the updater's timestamped snapshot
 - Only the explicitly named legacy ATD scanner/worker unit files, when present
 
+The rollback snapshot records each path using the same exact pathname the installer/updater writes. A source-check invariant covers the panel updater sudoers path so a typo cannot cause rollback to miss the existing rule.
+
 It does not replace the private configuration, Telegram delivery state, uploaded backup files, TLS certificate/key, or assigned ports. It does not modify RouterOS scripts, third-party web-server configuration, firewall rules, or unrelated service definitions. It requires the host Cron daemon for the ATD schedule; if no Cron unit exists, the current scripts can install/enable the generic daemon. Review host compatibility before using this flow on a server without an existing Cron service. The current production host's Cron daemon was observed active and enabled on 2026-10-28.
 
 The panel-triggered updater is a separate path: it calls a narrowly scoped root launcher which starts a transient ATD systemd update unit. Do not use that path when a policy or test explicitly prohibits background updater workers; the terminal command does not invoke the panel launcher.

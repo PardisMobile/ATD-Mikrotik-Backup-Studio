@@ -10,6 +10,7 @@ Reviewed: 2026-10-28. This report separates repository/source checks from live-h
 - Delivery: Linux Cron invokes the PHP scanner. The server checks file size stability, tracks sent-file SHA-256 state, and retains the existing delivery/deduplication behavior.
 - Timezone: panel state/config selects the Linux display and Cron `CRON_TZ`; the root-owned helper validates the IANA zone and calls `timedatectl`. A real timezone application changes host timezone and was not part of the read-only audit.
 - Updater: pins the updater and assets to one resolved commit, stages/syntax-checks before activation, snapshots ATD-owned files and relevant service states, applies within a lock/rollback boundary, and writes the installed-source marker only after required checks.
+- A post-deployment rollback audit found that an earlier updater snapshot listed `/etc/sudoers.d/atd-panel-update`, while the installer/updater actually writes `/etc/sudoers.d/atd-mikrotik-backup-panel-update`. The source is corrected to snapshot the exact file and the workflow now asserts that the installer and rollback paths agree. The next successful server update must confirm the exact path appears in `snapshots.list`; rollback failure injection remains reserved for a disposable host.
 
 ## Repository/source checks
 
