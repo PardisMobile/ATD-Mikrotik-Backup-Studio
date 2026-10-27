@@ -237,7 +237,8 @@ else
   exit 7
 fi
 visudo -cf /etc/sudoers.d/atd-panel-timezone >/dev/null || { echo 'Installed time-zone sudo rule failed validation; update aborted.' >&2; exit 7; }
-[[ -f /etc/sudoers.d/atd-panel-timezone && ! -w /etc/sudoers.d/atd-panel-timezone ]] || { echo 'Time-zone sudo rule ownership/permissions are invalid; update aborted.' >&2; exit 7; }
+TIMEZONE_SUDOERS_META="$(stat -c '%u:%g:%a' /etc/sudoers.d/atd-panel-timezone 2>/dev/null || true)"
+[[ "$TIMEZONE_SUDOERS_META" == '0:0:440' ]] || { echo "Time-zone sudo rule ownership/permissions are invalid (expected root:root 0440; got ${TIMEZONE_SUDOERS_META:-unavailable}); update aborted." >&2; exit 7; }
 
 # Stop ATD's web services while replacing app files. Then migrate old scanner
 # units only after all downloaded assets have passed validation and are backed up.
