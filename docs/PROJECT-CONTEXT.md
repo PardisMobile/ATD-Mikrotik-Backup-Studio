@@ -116,6 +116,10 @@ The following changes were attempted directly on `main`; re-fetch them before ac
 9. Verify the generated PHP config carries the chosen time zone correctly; confirm constant names and default-state logic match across generator, PHP, cron helper, installer, and updater.
 10. The panel's scheduled Telegram logic is frozen: preserve its existing baseline/dedup/retry behavior.
 
+
+### Applied follow-up fix — 2026-10-27
+- `server-deployment/panel.js`: the in-panel `update_start` form now uses the existing AJAX submission path. This allows the UI to detect the `UPDATE_STARTED` flash response and begin polling `?ajax=update_status`; previously the submit handler deliberately let this form use a native navigation, so the status poll never started. Time-zone submission remains native as intended.
+
 ### Last known CI state
 After the latest known generator fix, the GitHub checks reported success for:
 - `powershell-parse`
