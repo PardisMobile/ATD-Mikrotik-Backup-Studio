@@ -26,14 +26,14 @@ if [[ "${ATD_UPDATER_BOOTSTRAPPED:-0}" != "1" ]]; then
     "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$BOOT_COMMIT/server-deployment/update-standalone.sh" -o "$BOOT_UPDATER_TMP"
   [[ -s "$BOOT_UPDATER_TMP" ]] || { echo 'Latest updater download is empty; update aborted.' >&2; exit 5; }
   bash -n "$BOOT_UPDATER_TMP" || { echo 'Latest updater failed shell syntax validation.' >&2; exit 5; }
-  if ! cmp -s "$BOOT_UPDATER_TMP" "${BASH_SOURCE[0]}"; then
-    install -o root -g root -m 0750 "$BOOT_UPDATER_TMP" /usr/local/sbin/atd-mikrotik-backup-update
-    rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"
-    trap - EXIT
-    ATD_UPDATER_BOOTSTRAPPED=1 exec /usr/local/sbin/atd-mikrotik-backup-update
-  fi
+  # Always run the immutable latest updater once after fetching it. Comparing
+  # against BASH_SOURCE[0] is unreliable when the command is invoked through a
+  # symlink/wrapper or a different path; it can leave an old updater in control.
+  install -o root -g root -m 0750 "$BOOT_UPDATER_TMP" /usr/local/sbin/atd-mikrotik-backup-update
   rm -f -- "$BOOT_COMMIT_TMP" "$BOOT_UPDATER_TMP"
   trap - EXIT
+  echo "Updater bootstrapped from GitHub commit $BOOT_COMMIT."
+  ATD_UPDATER_BOOTSTRAPPED=1 exec /usr/local/sbin/atd-mikrotik-backup-update
 fi
 
 COMMIT_TMP=$(mktemp)
