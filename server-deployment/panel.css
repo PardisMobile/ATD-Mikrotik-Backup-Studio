@@ -43,11 +43,11 @@
 .atd-orbit-dotted{width:58%;height:58%;border-style:dashed;border-width:1px;opacity:.14;animation:atd-orbit-dotted-spin 40s linear infinite}
 .atd-hero-file{position:absolute;width:clamp(48px,23%,64px);height:clamp(52px,26%,70px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid var(--hero-border);border-radius:16px;background:var(--hero-surface);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.1),0 0 18px color-mix(in srgb,var(--hero-accent) 8%,transparent);color:#edf2fa;z-index:2;animation:atd-hero-card-float 5s ease-in-out infinite;will-change:transform}
 .atd-hero-file-icon{width:clamp(22px,12%,32px);height:clamp(22px,12%,32px);display:flex;align-items:center;justify-content:center}
-.atd-hero-file-icon .svg-icon{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.atd-hero-file-icon .svg-icon{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:1;filter:drop-shadow(0 0 4px currentColor)}
 .atd-hero-file>span:last-child{font-size:clamp(8px,3.2%,11px);font-weight:700;letter-spacing:.3px;line-height:1.2}
 .atd-file-router{top:25%;inset-inline-start:15%;color:var(--hero-accent);animation-delay:-1.2s}
-.atd-file-backup{top:18%;inset-inline-end:15%;color:var(--purple);animation-delay:-2.6s}
-.atd-file-telegram{bottom:18%;inset-inline-start:42%;color:#2ca5e0;animation-delay:-3.8s}
+.atd-file-backup{top:18%;inset-inline-end:15%;color:color-mix(in srgb,var(--purple) 72%,var(--hero-accent) 28%);animation-delay:-2.6s}
+.atd-file-telegram{bottom:18%;inset-inline-start:42%;color:color-mix(in srgb,#2ca5e0 72%,var(--hero-accent) 28%);animation-delay:-3.8s}
 @keyframes atd-hero-card-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes atd-hero-glow-pulse{0%,100%{opacity:.1;transform:translate(-50%,-50%) scale(1)}50%{opacity:.18;transform:translate(-50%,-50%) scale(1.08)}}
 @keyframes atd-orbit-horizontal{0%{transform:translate(-50%,-50%) rotate(0deg)}100%{transform:translate(-50%,-50%) rotate(360deg)}}
