@@ -81,3 +81,45 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
  .btn.is-loading::after,.icon-btn.is-loading::after{animation:none}
  .btn:active:not(:disabled),.icon-btn:active:not(:disabled),.language-btn:active,.page-link:active,.side-tab:active{transform:none}
 }
+
+/* More expressive motion tied to real panel interactions and panel states. */
+[data-panel-section]:not([hidden]){animation:atd-section-enter 480ms var(--atd-motion-ease) both}
+[data-panel-section]:not([hidden]) .stat-card,[data-panel-section]:not([hidden]) .guide-card{animation:atd-card-enter 520ms var(--atd-motion-ease) both}
+[data-panel-section]:not([hidden]) .stat-card:nth-child(2),[data-panel-section]:not([hidden]) .guide-card:nth-child(2){animation-delay:70ms}
+[data-panel-section]:not([hidden]) .stat-card:nth-child(3){animation-delay:130ms}
+[data-panel-section]:not([hidden]) .stat-card:nth-child(4){animation-delay:190ms}
+[data-panel-section]:not([hidden]) tbody tr{animation:atd-row-enter 360ms var(--atd-motion-ease) both}
+[data-panel-section]:not([hidden]) tbody tr:nth-child(2){animation-delay:35ms}
+[data-panel-section]:not([hidden]) tbody tr:nth-child(3){animation-delay:70ms}
+[data-panel-section]:not([hidden]) tbody tr:nth-child(4){animation-delay:105ms}
+[data-panel-section]:not([hidden]) tbody tr:nth-child(5){animation-delay:140ms}
+.side-tab{position:relative;overflow:hidden}
+.side-tab::before{content:"";position:absolute;inset-block:9px;inset-inline-start:0;width:3px;border-radius:99px;background:var(--blue);transform:scaleY(0);transition:transform 220ms var(--atd-motion-ease)}
+.side-tab.is-active::before{transform:scaleY(1)}
+.side-tab .svg-icon,.btn .svg-icon,.icon-btn .svg-icon{transition:transform 220ms var(--atd-motion-ease)}
+.side-tab:hover .svg-icon{transform:scale(1.1) rotate(-4deg)}
+.btn:hover:not(:disabled) .svg-icon,.icon-btn:hover:not(:disabled) .svg-icon{transform:scale(1.08)}
+.btn-primary{transition:transform 180ms var(--atd-motion-ease),box-shadow 220ms var(--atd-motion-ease),filter 220ms var(--atd-motion-ease)}
+.btn-primary:hover:not(:disabled){filter:brightness(1.045)}
+.guide-card,.stat-card{transition:transform 240ms var(--atd-motion-ease),box-shadow 240ms var(--atd-motion-ease),border-color 240ms var(--atd-motion-ease),background-color 240ms var(--atd-motion-ease)}
+.stat-card:hover{transform:translateY(-4px);box-shadow:0 15px 34px color-mix(in srgb,var(--blue) 12%,transparent)}
+.guide-card:hover{transform:translateY(-5px) scale(1.008)}
+.status-pill{animation:atd-status-enter 380ms var(--atd-motion-ease) both}
+.status-sent i{animation:atd-status-pulse 1.4s ease-out 1}
+.alert-success,.alert-error{animation:atd-feedback-in 360ms var(--atd-motion-ease) both}
+#themeToggle .svg-icon{transition:transform 320ms var(--atd-motion-ease),color 240ms var(--atd-motion-ease)}
+#themeToggle:hover .svg-icon{transform:rotate(-18deg) scale(1.12)}
+html[data-theme="dark"] #themeToggle:hover .svg-icon{transform:rotate(18deg) scale(1.12)}
+#refreshPanel:hover .svg-icon{animation:atd-refresh 520ms var(--atd-motion-ease) 1}
+.login-form input:focus,.telegram-form input:focus,.timezone-form select:focus,.timezone-form input:focus,.password-form input:focus{transform:translateY(-1px)}
+@keyframes atd-section-enter{from{opacity:0;transform:translateY(15px) scale(.992);filter:blur(2px)}to{opacity:1;transform:translateY(0) scale(1);filter:blur(0)}}
+@keyframes atd-card-enter{from{opacity:0;transform:translateY(13px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes atd-row-enter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
+@keyframes atd-status-enter{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+@keyframes atd-status-pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 38%,transparent)}100%{box-shadow:0 0 0 7px transparent}}
+@keyframes atd-refresh{50%{transform:rotate(90deg)}}
+@media(prefers-reduced-motion:reduce){
+ [data-panel-section]:not([hidden]),[data-panel-section]:not([hidden]) .stat-card,[data-panel-section]:not([hidden]) .guide-card,[data-panel-section]:not([hidden]) tbody tr,.status-sent i,#refreshPanel:hover .svg-icon{animation:none!important}
+ .stat-card:hover,.guide-card:hover,.login-form input:focus,.telegram-form input:focus,.timezone-form select:focus,.timezone-form input:focus,.password-form input:focus{transform:none}
+ .side-tab::before,.side-tab .svg-icon,.btn .svg-icon,.icon-btn .svg-icon,#themeToggle .svg-icon{transition:none}
+}
