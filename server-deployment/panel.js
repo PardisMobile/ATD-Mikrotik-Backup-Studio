@@ -30,10 +30,10 @@
     box.classList.remove('alert-error','alert-success');
   }
   function showMessage(message,ok){
-    let box=document.querySelector('.ajax-message');
-    if(!box){box=document.createElement('div');box.className='alert ajax-message';const main=document.querySelector('.main-content');if(main)main.prepend(box);}
+    let box=document.getElementById('panelFeedback');
+    if(!box){box=document.createElement('div');box.id='panelFeedback';box.className='alert panel-feedback';const topbar=document.querySelector('.main-content .topbar');if(topbar)topbar.insertAdjacentElement('afterend',box);else document.querySelector('.main-content')?.prepend(box);}
     if(messageTimer!==null)clearTimeout(messageTimer);
-    box.textContent=message;box.classList.toggle('alert-success',!!ok);box.classList.toggle('alert-error',!ok);
+    box.textContent=message;box.classList.add('ajax-message');box.classList.toggle('alert-success',!!ok);box.classList.toggle('alert-error',!ok);
     box.hidden=false;
     messageTimer=setTimeout(()=>dismissMessage(box),7000);
   }
@@ -143,8 +143,8 @@
         if(data.status==='current')status.textContent=fa?'پنل به‌روز است. نسخه: '+data.installed:'Panel is up to date. Version: '+data.installed;
         else if(data.status==='available')status.textContent=(fa?'نسخهٔ جدید موجود است: ':'Update available: ')+data.latest.slice(0,12);
         else if(data.status==='unknown')status.textContent=fa?'نسخهٔ نصب‌شده ثبت نشده؛ یک بار آپدیت اجرا کنید.':'Installed version is unknown; run the updater once.';
-        else status.textContent=data.message||(fa?'بررسی آپدیت ناموفق بود.':'Update check failed.');
-      }catch(error){if(status)status.textContent=(fa?'خطا در بررسی آپدیت: ':'Update check failed: ')+error.message;}
+        else {status.textContent=data.message||(fa?'بررسی آپدیت ناموفق بود.':'Update check failed.');showMessage(status.textContent,false);}
+      }catch(error){if(status)status.textContent=(fa?'خطا در بررسی آپدیت: ':'Update check failed: ')+error.message;showMessage((fa?'بررسی آپدیت ناموفق بود: ':'Update check failed: ')+error.message,false);}
       finally{checkUpdates.disabled=false;}
       return;
     }

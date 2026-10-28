@@ -254,6 +254,36 @@ if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
 else
   echo 'Warning: sudo/visudo is unavailable; system time-zone changes from the panel are disabled.' >&2
 fi
+
+if [[ -e /usr/local/sbin/atd-mikrotik-backup-snapshots || -L /usr/local/sbin/atd-mikrotik-backup-snapshots ]]; then
+  [[ -f /usr/local/sbin/atd-mikrotik-backup-snapshots && ! -L /usr/local/sbin/atd-mikrotik-backup-snapshots && "$(stat -c '%u:%g:%a' /usr/local/sbin/atd-mikrotik-backup-snapshots)" == '0:0:750' ]] || { echo 'Existing ATD snapshot helper ownership/mode is unexpected; installer stopped.' >&2; exit 9; }
+fi
+if [[ -e /etc/sudoers.d/atd-panel-snapshots || -L /etc/sudoers.d/atd-panel-snapshots ]]; then
+  [[ -f /etc/sudoers.d/atd-panel-snapshots && ! -L /etc/sudoers.d/atd-panel-snapshots && "$(stat -c '%u:%g:%a' /etc/sudoers.d/atd-panel-snapshots)" == '0:0:440' ]] || { echo 'Existing ATD snapshot sudo rule ownership/mode is unexpected; installer stopped.' >&2; exit 9; }
+  SNAPSHOT_RULES=$(grep -Ev '^[[:space:]]*(#|$)' /etc/sudoers.d/atd-panel-snapshots || true)
+  [[ "$SNAPSHOT_RULES" == 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-snapshots' ]] || { echo 'Existing ATD snapshot sudo rule content is unexpected; installer stopped.' >&2; exit 9; }
+fi
+SNAPSHOT_HELPER_TMP=$(mktemp)
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \
+  "https://raw.githubusercontent.com/PardisMobile/ATD-Mikrotik-Backup-Studio/$SOURCE_COMMIT/server-deployment/manage-snapshots.sh" -o "$SNAPSHOT_HELPER_TMP"
+bash -n "$SNAPSHOT_HELPER_TMP" || { rm -f "$SNAPSHOT_HELPER_TMP"; echo 'ATD snapshot helper failed syntax validation.' >&2; exit 9; }
+install -o root -g root -m 0750 "$SNAPSHOT_HELPER_TMP" /usr/local/sbin/atd-mikrotik-backup-snapshots
+rm -f "$SNAPSHOT_HELPER_TMP"
+if command -v sudo >/dev/null 2>&1 && command -v visudo >/dev/null 2>&1; then
+  SNAPSHOT_SUDOERS_TMP=$(mktemp /etc/sudoers.d/atd-panel-snapshots.XXXXXX)
+  printf '%s\n' 'atdbackup ALL=(root) NOPASSWD: /usr/local/sbin/atd-mikrotik-backup-snapshots' > "$SNAPSHOT_SUDOERS_TMP"
+  chmod 0440 "$SNAPSHOT_SUDOERS_TMP"
+  if visudo -cf "$SNAPSHOT_SUDOERS_TMP" >/dev/null; then
+    install -o root -g root -m 0440 "$SNAPSHOT_SUDOERS_TMP" /etc/sudoers.d/atd-panel-snapshots
+    rm -f "$SNAPSHOT_SUDOERS_TMP"
+  else
+    rm -f "$SNAPSHOT_SUDOERS_TMP"
+    echo 'Warning: snapshot management is disabled because its restricted sudo rule failed validation.' >&2
+  fi
+else
+  echo 'Warning: sudo/visudo is unavailable; snapshot management from the panel is disabled.' >&2
+fi
+
 UPDATE_TMP=$(mktemp)
 trap 'rm -f -- "$UPDATE_TMP"' EXIT
 curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 60 \

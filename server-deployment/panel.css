@@ -57,3 +57,28 @@
 @media(max-width:760px){.app-shell .welcome-art.atd-hero-visual{inset-inline-end:10px;width:175px}.atd-hero-file{width:52px;height:58px;border-radius:14px}.atd-hero-file-icon{width:25px;height:25px}.atd-hero-file>span:last-child{font-size:9px}.atd-file-router{top:23%;inset-inline-start:10%}.atd-file-backup{top:22%;inset-inline-end:10%}.atd-file-telegram{bottom:14%;inset-inline-start:38%}}
 @media(max-width:390px){.app-shell .welcome-art.atd-hero-visual{inset-inline-end:7px;width:158px;border-radius:22px}.atd-hero-file{width:48px;height:52px}.atd-hero-file-icon{width:22px;height:22px}.atd-file-router{top:23%;inset-inline-start:10%}.atd-file-backup{top:18%;inset-inline-end:15%}.atd-file-telegram{bottom:14%;inset-inline-start:38%}}
 @media(prefers-reduced-motion:reduce){.app-shell .welcome-art.atd-hero-visual,.app-shell .welcome-art.atd-hero-visual *{animation:none!important;transition:none!important;will-change:auto}}
+
+/* Fixed feedback position, balanced settings spacing, and ATD rollback snapshots. */
+.password-panel{margin-bottom:26px}
+.update-panel{margin-bottom:26px}
+#panelFeedback.alert{margin:0 0 18px}
+#panelFeedback[hidden]{display:none!important}
+.telegram-test-form{align-items:stretch;flex-direction:column}
+.telegram-start-warning{display:grid;gap:3px;width:100%;padding:12px 15px;border:1px solid #ef4444;border-inline-start-width:5px;border-radius:12px;background:#fff1f2;color:#991b1b;line-height:1.65}
+.telegram-start-warning strong{font-size:12px}
+.telegram-start-warning span{font-size:12px}
+.snapshot-panel{padding:17px 24px 20px;border-top:1px solid var(--line)}
+.snapshot-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.snapshot-heading h3{margin:0;font-size:14px}
+.snapshot-heading p,.snapshot-unavailable{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.65}
+.snapshot-count{display:grid;place-items:center;min-width:28px;height:28px;padding:0 8px;border-radius:999px;background:var(--blue-soft);color:var(--blue);font-size:11px;font-weight:800}
+.snapshot-table-wrap{max-height:380px;overflow:auto}
+.snapshot-table{width:100%;border-collapse:collapse}
+.snapshot-table th,.snapshot-table td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:start;font-size:11px}
+.snapshot-table th{position:sticky;top:0;background:var(--surface-2);color:var(--muted);z-index:1}
+.snapshot-table td strong{font-size:11px}
+.snapshot-empty{padding:14px;border-radius:10px;background:var(--surface-2);color:var(--muted);font-size:12px}
+.snapshot-unavailable{padding:12px;border:1px solid var(--orange);border-radius:10px;background:var(--orange-soft);color:var(--text)}
+html[data-theme="dark"] .telegram-start-warning{background:#3a2024;color:#ffc6cc;border-color:#f87171}
+html[data-theme="dark"] .snapshot-unavailable{background:color-mix(in srgb,var(--orange) 14%,var(--surface))}
+@media(max-width:760px){.snapshot-panel{padding:15px}.snapshot-table th,.snapshot-table td{padding:9px 7px;font-size:10px}.snapshot-table-wrap{max-height:320px}}

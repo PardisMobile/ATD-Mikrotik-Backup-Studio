@@ -9,6 +9,8 @@ These rules are the project's source of truth. Future implementation, refactorin
 - AJAX forms must derive their request URL from `form.getAttribute('action')`, never the `form.action` DOM property, because the hidden `name="action"` field shadows that property and yields a 404 path.
 - PHP runs as `atdbackup`; root-owned 0750 helpers and 0440 sudoers files are intentionally not readable/executable directly by PHP. Readiness checks must use `sudo -n -l <fixed-command>` and must not treat `is_readable`/`is_executable` on those protected paths as proof that installation is missing.
 - Updates are terminal-only. Do not create or invoke a panel background Worker. Preserve unrelated systemd unit/timer files and never disable/remove units. The updater may change only the `NoNewPrivileges` directive in the ATD-owned PHP unit, because otherwise systemd blocks the explicitly sudo-authorized timezone helper; keep its other hardening directives. Retire only the known legacy ATD panel-update sudo rule so relaxing that one service property cannot reactivate the obsolete launcher.
+- ATD update snapshots are managed only beneath `/var/lib/atd-mikrotik-backup-studio/code-backup-*` through a root-owned, narrowly scoped helper and a dedicated ATD sudoers rule. The panel may list and delete only validated immediate-child snapshot directories. On successful updates, retain the two newest successful rollback snapshots plus successful snapshots from the previous seven days; never automatically delete legacy/unverified snapshots. Do not create a panel updater Worker.
+- Keep operation feedback in one persistent live region directly below the panel header. Place the Telegram `/start` warning immediately above the Telegram test action. Keep the Panel Updates-to-password-section vertical spacing equal.
 
 ### 1. Existing working core
 - The baseline is MikroTik Backup Studio v3 with working RouterOS 7 scheduled backups over SFTP.
@@ -91,6 +93,7 @@ This section preserves requirements and review notes from the 2026-10-26 handoff
 - Provide the five-option time-zone selector directly below the warning, including Manual with an example.
 - Linux time-zone selection changes the actual Linux zone only. ATD Cron uses a separate schedule-zone setting through `CRON_TZ`; the current project configuration is one global schedule, not per-router timezone conversion.
 - Improve lightweight CSS animation and visual consistency.
+- The backup table's Modified field remains the filesystem modification time; do not reinterpret it from the backup filename unless a future change is explicitly approved.
 - Avoid full-page refresh for normal panel actions where safely feasible; preserve POST/CSRF/redirect/session behavior and ensure failures are visible. Do not use a fragile generic AJAX replacement that silently breaks forms or navigation.
 - Show at most 20 backup files per page; retain accurate total counts/status and implement server-side search and pagination. Sorting was requested for review but must not be claimed as implemented unless it exists and works.
 - Footer must read “Code by Amir Taheri”, linked to `https://wa.me/pardis.mobile.kish` (user confirms this link works).
