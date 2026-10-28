@@ -82,3 +82,36 @@
 html[data-theme="dark"] .telegram-start-warning{background:#3a2024;color:#ffc6cc;border-color:#f87171}
 html[data-theme="dark"] .snapshot-unavailable{background:color-mix(in srgb,var(--orange) 14%,var(--surface))}
 @media(max-width:760px){.snapshot-panel{padding:15px}.snapshot-table th,.snapshot-table td{padding:9px 7px;font-size:10px}.snapshot-table-wrap{max-height:320px}}
+
+/* Scoped polish for settings actions: preserve behavior, adjust layout only. */
+.update-panel #checkUpdates,
+.telegram-test-form > button[type="submit"] {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: 0 5px 12px #1769e020;
+}
+.update-panel #checkUpdates:hover:not(:disabled),
+.telegram-test-form > button[type="submit"]:hover:not(:disabled) {
+  box-shadow: 0 8px 18px #1769e032;
+}
+.telegram-test-form > button[type="submit"]:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.timezone-panel .timezone-form {
+  flex-direction: column;
+  align-items: stretch;
+}
+.timezone-panel .timezone-form > label {
+  width: 100%;
+  max-width: 560px;
+}
+.timezone-panel .timezone-form > button[type="submit"] {
+  align-self: flex-start;
+}
