@@ -47,6 +47,9 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
 .atd-backup-card{position:absolute;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:62px;height:66px;border:1px solid color-mix(in srgb,var(--blue) 36%,var(--line));border-radius:16px;background:color-mix(in srgb,var(--surface) 88%,#081836);color:var(--text);font-size:9px;font-weight:700;line-height:1.1;box-shadow:0 0 25px color-mix(in srgb,var(--blue) 19%,transparent),0 8px 20px rgba(15,35,70,.12);backdrop-filter:blur(10px);animation:atd-backup-card-float 4s ease-in-out infinite}
 .atd-backup-icon{display:grid;place-items:center;color:inherit}
 .atd-backup-icon .svg-icon{width:25px;height:25px;stroke-width:1.8}
+.atd-backup-icon .svg-icon{transform-origin:50% 50%;animation:atd-backup-icon-router 3.4s ease-in-out infinite}
+.atd-file-card .atd-backup-icon .svg-icon{animation-name:atd-backup-icon-file;animation-duration:3.8s;animation-delay:-.8s}
+.atd-telegram-card .atd-backup-icon .svg-icon{animation-name:atd-backup-icon-telegram;animation-duration:2.9s;animation-delay:-1.2s}
 .atd-router-card{top:8%;inset-inline-start:8%;color:#12a9eb}
 .atd-file-card{top:39%;inset-inline-end:0;color:#8b5cf6;animation-delay:-1.3s}
 .atd-telegram-card{bottom:7%;inset-inline-start:27%;color:#279bd8;animation-delay:-2.4s}
@@ -54,6 +57,9 @@ html[data-theme="dark"] .atd-backup-card{background:rgba(8,24,54,.82);border-col
 @keyframes atd-backup-orbit-rotate{to{transform:rotate(360deg)}}
 @keyframes atd-backup-card-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
 @keyframes atd-backup-core-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+@keyframes atd-backup-icon-router{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes atd-backup-icon-file{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-2px) rotate(-4deg)}}
+@keyframes atd-backup-icon-telegram{0%,100%{transform:translate(0,0) rotate(0)}50%{transform:translate(1px,-2px) rotate(3deg)}}
 @media(max-width:960px){.welcome-strip{min-height:220px}.welcome-copy{max-width:calc(100% - 205px)}.welcome-art.atd-backup-visual{width:190px;height:auto}}
 @media(max-width:760px){.welcome-strip{min-height:210px}.welcome-copy{max-width:calc(100% - 185px)}.welcome-art.atd-backup-visual{inset-inline-end:10px;width:175px;height:auto}.atd-backup-card{width:50px;height:54px;border-radius:13px;font-size:8px}.atd-backup-icon .svg-icon{width:21px;height:21px}.atd-backup-core>span{font-size:20px}.atd-backup-core>strong{font-size:7px}}
 @media(max-width:390px){.welcome-strip{min-height:198px;padding-inline:16px}.welcome-copy{max-width:calc(100% - 154px)}.welcome-art.atd-backup-visual{inset-inline-end:7px;width:158px;height:auto;opacity:1}.atd-backup-card{width:46px;height:50px}.atd-file-card{inset-inline-end:0}}
