@@ -195,3 +195,4 @@ html[data-theme="dark"] #themeToggle:hover .svg-icon{transform:rotate(18deg) sca
 @keyframes atd-hero-glow-pulse{0%,100%{opacity:.55;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.15)}}
 @media(max-width:760px){.atd-hero-glow{filter:blur(26px)}.atd-backup-core{inset:25%}}
 @media(prefers-reduced-motion:reduce){.welcome-art.atd-backup-visual,.welcome-art.atd-backup-visual *{animation:none!important}.atd-hero-glow{opacity:.7;filter:blur(26px)}}
+.sidebar .brand-mark .svg-icon{animation:none!important;filter:drop-shadow(0 0 5px rgba(255,255,255,.35))}
