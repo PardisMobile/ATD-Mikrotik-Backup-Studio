@@ -175,12 +175,23 @@ html[data-theme="dark"] #themeToggle:hover .svg-icon{transform:rotate(18deg) sca
 @keyframes atd-sidebar-brand-shine{0%,15%{transform:translateX(-200%) rotate(25deg);opacity:0}25%{opacity:1}55%,100%{transform:translateX(350%) rotate(25deg);opacity:0}}
 @media(prefers-reduced-motion:reduce){.sidebar .brand-mark,.sidebar .brand-mark::after{animation:none!important}.sidebar .brand-mark{filter:none!important}}
 
-/* Theme-aware logo glow and clearer Files Portal-inspired Hero motion. */
-.sidebar .brand-mark{background:linear-gradient(135deg,color-mix(in srgb,var(--blue) 72%,#08b8ff) 0%,var(--blue) 52%,color-mix(in srgb,var(--blue) 72%,#753bff) 100%);box-shadow:0 0 18px color-mix(in srgb,var(--blue) 36%,transparent),0 0 35px color-mix(in srgb,var(--blue) 22%,transparent),inset 0 1px 1px rgba(255,255,255,.3)}
-@keyframes atd-sidebar-brand-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 18px color-mix(in srgb,var(--blue) 36%,transparent),0 0 35px color-mix(in srgb,var(--blue) 22%,transparent),inset 0 1px 1px rgba(255,255,255,.3)}50%{filter:brightness(1.2);box-shadow:0 0 25px color-mix(in srgb,var(--blue) 55%,transparent),0 0 50px color-mix(in srgb,var(--blue) 38%,transparent),inset 0 1px 2px rgba(255,255,255,.45)}}
-.atd-backup-orbit{border-style:dashed;border-color:color-mix(in srgb,var(--blue) 42%,transparent);opacity:.9;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--blue) 24%,transparent))}
-.atd-orbit-two{border-style:dotted;border-color:color-mix(in srgb,var(--blue) 34%,#9d7aff 22%);opacity:.8;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--blue) 18%,transparent))}
-.atd-backup-core{inset:25%;background:linear-gradient(145deg,color-mix(in srgb,var(--blue) 78%,#08b8ff),color-mix(in srgb,var(--blue) 66%,#5630d8));box-shadow:0 0 34px color-mix(in srgb,var(--blue) 40%,transparent),0 0 60px color-mix(in srgb,var(--blue) 20%,transparent),inset 0 0 22px rgba(255,255,255,.18)}
-.atd-backup-card{opacity:.7;transition:opacity 220ms var(--atd-motion-ease),filter 220ms var(--atd-motion-ease)}
-.atd-backup-card:hover{opacity:.96;filter:brightness(1.08)}
-@media(max-width:760px){.atd-backup-core{inset:25%}.atd-backup-card{opacity:.78}}
+/* Theme-aware sidebar logo: retain the moving shine without a pulse. */
+.sidebar .brand-mark{background:linear-gradient(135deg,color-mix(in srgb,var(--blue) 72%,#08b8ff) 0%,var(--blue) 52%,color-mix(in srgb,var(--blue) 72%,#753bff) 100%);box-shadow:0 0 18px color-mix(in srgb,var(--blue) 36%,transparent),0 0 35px color-mix(in srgb,var(--blue) 22%,transparent),inset 0 1px 1px rgba(255,255,255,.3);animation:none!important}
+.sidebar .brand-mark::after{animation:atd-sidebar-brand-shine 4s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){.sidebar .brand-mark,.sidebar .brand-mark::after{animation:none!important}.sidebar .brand-mark{filter:none!important}}
+
+/* Hero-only Files Portal-inspired router, backup and Telegram animation. */
+.welcome-art.atd-backup-visual{overflow:hidden;background:radial-gradient(circle at 50% 35%,color-mix(in srgb,var(--blue) 28%,transparent),color-mix(in srgb,var(--blue) 9%,transparent) 55%,transparent 76%);animation:atd-hero-backdrop-pulse 5s ease-in-out infinite}
+.atd-hero-glow{position:absolute;z-index:0;top:7%;left:50%;width:86%;aspect-ratio:1;transform:translateX(-50%);border-radius:50%;background:color-mix(in srgb,var(--blue) 24%,transparent);filter:blur(34px);pointer-events:none;animation:atd-hero-glow-pulse 5s ease-in-out infinite}
+.atd-backup-orbit{position:absolute;inset:auto;top:50%;left:50%;z-index:1;width:88%;height:48%;border:1px solid color-mix(in srgb,var(--blue) 42%,transparent);border-radius:50%;pointer-events:none;transform-origin:center;animation:atd-hero-orbit-spin 18s linear infinite}
+.atd-orbit-two{width:56%;height:88%;border-color:color-mix(in srgb,var(--blue) 32%,transparent);animation:atd-hero-orbit-reverse 24s linear infinite}
+.atd-orbit-dotted{width:72%;height:72%;border-style:dashed;border-color:color-mix(in srgb,var(--blue) 27%,transparent);animation:atd-hero-orbit-spin 30s linear infinite}
+.atd-backup-core{inset:25%;z-index:2;background:radial-gradient(circle at 35% 28%,color-mix(in srgb,var(--blue) 78%,#8bd5ff),color-mix(in srgb,var(--blue) 88%,#1643b8) 70%);box-shadow:0 0 34px color-mix(in srgb,var(--blue) 42%,transparent),0 0 68px color-mix(in srgb,var(--blue) 24%,transparent),inset 0 0 22px rgba(255,255,255,.2)}
+.atd-backup-card{z-index:3;opacity:.82;background:rgba(10,30,75,.76);border-color:color-mix(in srgb,var(--blue) 32%,rgba(120,190,255,.3));box-shadow:0 10px 30px rgba(0,0,0,.15),0 0 20px color-mix(in srgb,var(--blue) 12%,transparent)}
+.atd-backup-icon .svg-icon{opacity:.82}
+@keyframes atd-hero-orbit-spin{from{transform:translate(-50%,-50%) rotate(0deg)}to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes atd-hero-orbit-reverse{from{transform:translate(-50%,-50%) rotate(42deg)}to{transform:translate(-50%,-50%) rotate(-318deg)}}
+@keyframes atd-hero-backdrop-pulse{0%,100%{filter:brightness(.96)}50%{filter:brightness(1.12)}}
+@keyframes atd-hero-glow-pulse{0%,100%{opacity:.55;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.15)}}
+@media(max-width:760px){.atd-hero-glow{filter:blur(26px)}.atd-backup-core{inset:25%}}
+@media(prefers-reduced-motion:reduce){.welcome-art.atd-backup-visual,.welcome-art.atd-backup-visual *{animation:none!important}.atd-hero-glow{opacity:.7;filter:blur(26px)}}
