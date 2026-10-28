@@ -42,7 +42,7 @@ html[data-theme="dark"] .welcome-art{color:var(--blue);background:color-mix(in s
 .atd-backup-orbit{position:absolute;inset:7%;border:1px solid color-mix(in srgb,var(--blue) 32%,transparent);border-radius:50%;pointer-events:none;animation:atd-backup-orbit-rotate 18s linear infinite}
 .atd-orbit-two{inset:19%;border-color:color-mix(in srgb,#8b5cf6 40%,transparent);animation-direction:reverse;animation-duration:12s}
 .atd-backup-core{position:absolute;inset:29%;display:grid;align-content:center;justify-items:center;gap:2px;border-radius:50%;background:linear-gradient(145deg,#087dff,#5630d8);color:#fff;box-shadow:0 0 30px rgba(0,140,255,.35),inset 0 0 20px rgba(255,255,255,.15);animation:atd-backup-core-pulse 3s ease-in-out infinite}
-.atd-backup-core>span{font-size:clamp(19px,2vw,25px);font-weight:800;line-height:1;letter-spacing:.02em}
+.atd-backup-core>span{font-size:clamp(19px,2vw,25px);font-weight:800;line-height:1;letter-spacing:.02em};animation:atd-backup-logo-mark 3s ease-in-out infinite;transform-origin:50% 50%
 .atd-backup-core>strong{font-size:8px;line-height:1.2;letter-spacing:.16em}
 .atd-backup-card{position:absolute;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:62px;height:66px;border:1px solid color-mix(in srgb,var(--blue) 36%,var(--line));border-radius:16px;background:color-mix(in srgb,var(--surface) 88%,#081836);color:var(--text);font-size:9px;font-weight:700;line-height:1.1;box-shadow:0 0 25px color-mix(in srgb,var(--blue) 19%,transparent),0 8px 20px rgba(15,35,70,.12);backdrop-filter:blur(10px);animation:atd-backup-card-float 4s ease-in-out infinite}
 .atd-backup-icon{display:grid;place-items:center;color:inherit}
@@ -60,6 +60,7 @@ html[data-theme="dark"] .atd-backup-card{background:rgba(8,24,54,.82);border-col
 @keyframes atd-backup-icon-router{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
 @keyframes atd-backup-icon-file{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-2px) rotate(-4deg)}}
 @keyframes atd-backup-icon-telegram{0%,100%{transform:translate(0,0) rotate(0)}50%{transform:translate(1px,-2px) rotate(3deg)}}
+@keyframes atd-backup-logo-mark{0%,100%{transform:scale(1);text-shadow:0 0 7px rgba(190,225,255,.25)}50%{transform:scale(1.06);text-shadow:0 0 16px rgba(255,255,255,.7)}}
 @media(max-width:960px){.welcome-strip{min-height:220px}.welcome-copy{max-width:calc(100% - 205px)}.welcome-art.atd-backup-visual{width:190px;height:auto}}
 @media(max-width:760px){.welcome-strip{min-height:210px}.welcome-copy{max-width:calc(100% - 185px)}.welcome-art.atd-backup-visual{inset-inline-end:10px;width:175px;height:auto}.atd-backup-card{width:50px;height:54px;border-radius:13px;font-size:8px}.atd-backup-icon .svg-icon{width:21px;height:21px}.atd-backup-core>span{font-size:20px}.atd-backup-core>strong{font-size:7px}}
 @media(max-width:390px){.welcome-strip{min-height:198px;padding-inline:16px}.welcome-copy{max-width:calc(100% - 154px)}.welcome-art.atd-backup-visual{inset-inline-end:7px;width:158px;height:auto;opacity:1}.atd-backup-card{width:46px;height:50px}.atd-file-card{inset-inline-end:0}}
