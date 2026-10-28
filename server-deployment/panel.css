@@ -157,3 +157,11 @@ html[data-theme="dark"] #themeToggle:hover .svg-icon{transform:rotate(18deg) sca
  .stat-card:hover,.guide-card:hover,.login-form input:focus,.telegram-form input:focus,.timezone-form select:focus,.timezone-form input:focus,.password-form input:focus{transform:none}
  .side-tab::before,.side-tab .svg-icon,.btn .svg-icon,.icon-btn .svg-icon,#themeToggle .svg-icon{transition:none}
 }
+
+
+/* Gentle glow for the actual ATD router logo in the sidebar. */
+.sidebar .brand-mark{transform-origin:center;animation:atd-sidebar-logo-glow 2.8s ease-in-out infinite}
+.sidebar .brand-mark .svg-icon{transform-origin:center;animation:atd-sidebar-logo-icon 2.8s ease-in-out infinite}
+@keyframes atd-sidebar-logo-glow{0%,100%{filter:brightness(1);box-shadow:0 7px 16px color-mix(in srgb,var(--blue) 20%,transparent)}45%{filter:brightness(1.12);box-shadow:0 0 18px color-mix(in srgb,var(--blue) 42%,transparent),0 7px 20px color-mix(in srgb,var(--blue) 28%,transparent)}55%{filter:brightness(1.2);box-shadow:0 0 23px color-mix(in srgb,var(--blue) 52%,transparent),0 8px 22px color-mix(in srgb,var(--blue) 32%,transparent)}}
+@keyframes atd-sidebar-logo-icon{0%,100%{transform:translateY(0) scale(1);filter:brightness(1)}45%{transform:translateY(-1px) scale(1.04);filter:brightness(1.18)}55%{transform:translateY(0) scale(1.07);filter:brightness(1.35)}}
+@media(prefers-reduced-motion:reduce){.sidebar .brand-mark,.sidebar .brand-mark .svg-icon{animation:none!important;filter:none!important}}
