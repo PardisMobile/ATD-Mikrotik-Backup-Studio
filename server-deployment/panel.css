@@ -174,3 +174,13 @@ html[data-theme="dark"] #themeToggle:hover .svg-icon{transform:rotate(18deg) sca
 @keyframes atd-sidebar-brand-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 18px rgba(0,153,255,.35),0 0 35px rgba(103,58,255,.2),inset 0 1px 1px rgba(255,255,255,.3)}50%{filter:brightness(1.2);box-shadow:0 0 25px rgba(0,153,255,.55),0 0 50px rgba(103,58,255,.35),inset 0 1px 2px rgba(255,255,255,.45)}}
 @keyframes atd-sidebar-brand-shine{0%,15%{transform:translateX(-200%) rotate(25deg);opacity:0}25%{opacity:1}55%,100%{transform:translateX(350%) rotate(25deg);opacity:0}}
 @media(prefers-reduced-motion:reduce){.sidebar .brand-mark,.sidebar .brand-mark::after{animation:none!important}.sidebar .brand-mark{filter:none!important}}
+
+/* Theme-aware logo glow and clearer Files Portal-inspired Hero motion. */
+.sidebar .brand-mark{background:linear-gradient(135deg,color-mix(in srgb,var(--blue) 72%,#08b8ff) 0%,var(--blue) 52%,color-mix(in srgb,var(--blue) 72%,#753bff) 100%);box-shadow:0 0 18px color-mix(in srgb,var(--blue) 36%,transparent),0 0 35px color-mix(in srgb,var(--blue) 22%,transparent),inset 0 1px 1px rgba(255,255,255,.3)}
+@keyframes atd-sidebar-brand-pulse{0%,100%{filter:brightness(1);box-shadow:0 0 18px color-mix(in srgb,var(--blue) 36%,transparent),0 0 35px color-mix(in srgb,var(--blue) 22%,transparent),inset 0 1px 1px rgba(255,255,255,.3)}50%{filter:brightness(1.2);box-shadow:0 0 25px color-mix(in srgb,var(--blue) 55%,transparent),0 0 50px color-mix(in srgb,var(--blue) 38%,transparent),inset 0 1px 2px rgba(255,255,255,.45)}}
+.atd-backup-orbit{border-style:dashed;border-color:color-mix(in srgb,var(--blue) 42%,transparent);opacity:.9;filter:drop-shadow(0 0 4px color-mix(in srgb,var(--blue) 24%,transparent))}
+.atd-orbit-two{border-style:dotted;border-color:color-mix(in srgb,var(--blue) 34%,#9d7aff 22%);opacity:.8;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--blue) 18%,transparent))}
+.atd-backup-core{inset:25%;background:linear-gradient(145deg,color-mix(in srgb,var(--blue) 78%,#08b8ff),color-mix(in srgb,var(--blue) 66%,#5630d8));box-shadow:0 0 34px color-mix(in srgb,var(--blue) 40%,transparent),0 0 60px color-mix(in srgb,var(--blue) 20%,transparent),inset 0 0 22px rgba(255,255,255,.18)}
+.atd-backup-card{opacity:.7;transition:opacity 220ms var(--atd-motion-ease),filter 220ms var(--atd-motion-ease)}
+.atd-backup-card:hover{opacity:.96;filter:brightness(1.08)}
+@media(max-width:760px){.atd-backup-core{inset:25%}.atd-backup-card{opacity:.78}}
